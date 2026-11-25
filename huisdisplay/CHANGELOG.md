@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1
+- Spoken answers kept to two short sentences.
+
 ## 0.4.0
 - Display firmware 0.1.5: chimes, the green LED only lights during updates, hold DOWN to switch off also on USB.
 - Chimes for rain coming, reminders, waste tonight, party mornings and automation cards (`"chime": "alert"`), with quiet hours.

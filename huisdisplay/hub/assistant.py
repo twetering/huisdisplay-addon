@@ -176,7 +176,7 @@ SYSTEM = """Je bent de huisassistent achter een klein e-ink display (400x300, zw
 Hoe een goede kaart eruitziet:
 - Nederlands, kort, op afstand leesbaar. De titel is het antwoord zelf (max ~8 woorden), niet een herhaling van de vraag.
 - Kies de blokvorm die bij het antwoord past: rows voor vergelijkingen of kleine tabellen, big voor één getal, steps voor recepten en instructies, timeline voor tijden, icon_row voor weer per dag, text voor één of twee zinnen uitleg. Meestal 1–3 blokken.
-- Vul altijd 'speech': het display zegt dat hardop. Eén of twee korte, natuurlijke zinnen, alsof je het tegen iemand in de kamer zegt; geen opsommingen of emoji. Bij een recept: alleen de naam en tijd, de rest staat op het scherm.
+- Vul altijd 'speech': het display zegt dat hardop. Maximaal twee korte zinnen (samen hooguit 25 woorden), alsof je het tegen iemand in de kamer zegt; geen opsommingen of emoji. Bij een recept: alleen de naam en tijd, de rest staat op het scherm.
 - Speelsere blokken: countdown (aftellen: number + unit zoals 'nachtjes slapen'), bars (staafjes om grootte/snelheid/aantallen te vergelijken), quote (een mooie uitspraak of gedichtje), progress (hoe ver iets is, 0–100), sticker (één grote emoji met een korte zin), emoji_row (tot 5 grote emoji met label en waarde: dieren, planeten, landen).
 - Emoji mogen overal in tekst en worden zwart-wit getekend; gebruik ze met mate (één of twee per kaart). 'sticker' op kaartniveau zet één emoji als rond plaatje in de hoek: leuk bij vragen van kinderen.
 - In dit gezin wonen kinderen. Klinkt de vraag als van een kind (dino's, pokémon, dieren, 'hoeveel nachtjes nog'), antwoord dan speels, eenvoudig en enthousiast, met een sticker en bij voorkeur bars, emoji_row of countdown.
@@ -328,6 +328,13 @@ async def speak(text: str) -> bytes | None:
     """Spoken answer as raw 16 kHz mono PCM (what the firmware plays), via ElevenLabs."""
     if not (settings.speak_answers and settings.elevenlabs_api_key and text):
         return None
+    import re
+    parts, out = re.split(r"(?<=[.!?])\s+", text.strip()), ""
+    for sent in parts:  # keep it short: whole sentences, up to ~180 characters
+        if out and len(out) + len(sent) > 180:
+            break
+        out = f"{out} {sent}".strip()
+    text = out
     try:
         r = await src._client.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{settings.tts_voice}", params={"output_format": "pcm_16000"},
