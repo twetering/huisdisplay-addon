@@ -643,7 +643,7 @@ async def page_huis(ctx: Ctx):
     def tile(x, y, w, h, label, value, sub=""):
         c.rect(x, y, x + w, y + h, outline=BLACK, r=6)
         c.text((x + 10, y + 7), label.upper(), font(10, "sans", "SemiBold"))
-        c.text((x + 10, y + 21), value, font(24, "cond"))
+        c.text((x + 10, y + 21), c.fit(value, font(24, "cond"), w - 18), font(24, "cond"))
         if sub:
             c.text((x + 10, y + h - 19), c.fit(sub, font(11, "sans", "Regular"), w - 18), font(11, "sans", "Regular"))
 
@@ -661,7 +661,8 @@ async def page_huis(ctx: Ctx):
     opened = [s[e]["attributes"].get("friendly_name", e).replace(" Contact", "") for e in s
               if e.startswith("binary_sensor.") and e.endswith("_contact") and s[e]["state"] == "on"]
     tile(14, 122, 120, 76, "Ramen/deuren", "dicht" if not opened else f"{len(opened)} open", ", ".join(opened[:2]))
-    climates = [e for e in s if e.startswith("climate.")]
+    ok = lambda e: s[e]["state"] not in ("unknown", "unavailable")
+    climates = [e for e in s if e.startswith("climate.") and ok(e)]
     if climates:
         ca = s[climates[0]]["attributes"]
         tile(140, 122, 120, 76, "Warmtepomp", f"{ca.get('current_temperature', '–')}°",
@@ -670,7 +671,7 @@ async def page_huis(ctx: Ctx):
     if kona:
         tile(266, 122, 120, 76, "Kona", f"{s[kona[0]]['state']}%", "accu")
     else:
-        locks = [e for e in s if e.startswith("lock.")]
+        locks = [e for e in s if e.startswith("lock.") and ok(e)]
         if locks:
             tile(266, 122, 120, 76, "Slot", "op slot" if s[locks[0]]["state"] == "locked" else s[locks[0]]["state"],
                  s[locks[0]]["attributes"].get("friendly_name", ""))

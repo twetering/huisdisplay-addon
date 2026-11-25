@@ -144,6 +144,8 @@ def frame_response(canvas, next_s: int, d: Device, page: str, inm: str | None = 
     fw = firmware_version()
     if fw:
         headers["X-Firmware"] = fw
+    if settings.hub_redirect:
+        headers["X-Hub-Url"] = settings.hub_redirect
     if extra_headers:
         headers.update(extra_headers)
     if inm and inm == etag and not extra:

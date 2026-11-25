@@ -58,6 +58,7 @@ class Settings:
     strava_client_secret: str = field(default_factory=lambda: opt("STRAVA_CLIENT_SECRET"))
     shopping_list: str = field(default_factory=lambda: opt("SHOPPING_LIST", "todo.shopping_list"))
     tz: str = field(default_factory=lambda: opt("TZ", "Europe/Amsterdam"))
+    hub_redirect: str = field(default_factory=lambda: opt("HUB_REDIRECT"))  # send displays to this hub (fw >= 0.1.4)
     port: int = field(default_factory=lambda: int(opt("PORT", "8787")))
     firmware_dir: Path = field(default_factory=lambda: Path(opt("FIRMWARE_DIR", str(HUB_DIR / "firmware"))))
     data_dir: Path = field(default_factory=lambda: Path("/data") if Path("/data/options.json").exists() else HUB_DIR / "data")
