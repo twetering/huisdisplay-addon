@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime as dt
 
 MODES = ("ochtend", "dag", "koken", "avond", "nacht")
-TITLES = {"ochtend": "Goedemorgen", "dag": "Nu", "koken": "Koken", "avond": "Morgen", "nacht": "Morgen"}
+TITLES = {"ochtend": "Goedemorgen", "dag": "Nu", "koken": "Koken", "avond": "Morgen", "nacht": "Welterusten"}
 
 
 def is_workday(d: dt.date) -> bool:

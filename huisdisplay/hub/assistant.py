@@ -176,6 +176,9 @@ SYSTEM = """Je bent de huisassistent achter een klein e-ink display (400x300, zw
 Hoe een goede kaart eruitziet:
 - Nederlands, kort, op afstand leesbaar. De titel is het antwoord zelf (max ~8 woorden), niet een herhaling van de vraag.
 - Kies de blokvorm die bij het antwoord past: rows voor vergelijkingen of kleine tabellen, big voor één getal, steps voor recepten en instructies, timeline voor tijden, icon_row voor weer per dag, text voor één of twee zinnen uitleg. Meestal 1–3 blokken.
+- Speelsere blokken: countdown (aftellen: number + unit zoals 'nachtjes slapen'), bars (staafjes om grootte/snelheid/aantallen te vergelijken), quote (een mooie uitspraak of gedichtje), progress (hoe ver iets is, 0–100), sticker (één grote emoji met een korte zin), emoji_row (tot 5 grote emoji met label en waarde: dieren, planeten, landen).
+- Emoji mogen overal in tekst en worden zwart-wit getekend; gebruik ze met mate (één of twee per kaart). 'sticker' op kaartniveau zet één emoji als rond plaatje in de hoek: leuk bij vragen van kinderen.
+- In dit gezin wonen kinderen. Klinkt de vraag als van een kind (dino's, pokémon, dieren, 'hoeveel nachtjes nog'), antwoord dan speels, eenvoudig en enthousiast, met een sticker en bij voorkeur bars, emoji_row of countdown.
 - Gebruik 'accent' alleen voor één sprekend woord uit de titel (wordt groot en cursief).
 - Lange inhoud (recepten) mag: het display verdeelt het over schermen die met OK doorgebladerd worden. Zet dan keep_seconds op 1800.
 
@@ -273,8 +276,10 @@ def _text_card(text: str, query: str) -> dict:
 async def ask(query: str, history: list[dict]) -> dict:
     """Run Claude with tools until it calls show_card. Returns the card dict."""
     n = src.now()
-    context = (f"Het is nu {pages.DAYS[n.weekday()]} {n:%d-%m-%Y %H:%M}. "
-               f"Huidige pagina op het display wordt meegegeven door het systeem.")
+    from . import fun
+    family = fun.describe_for_assistant(n.date())
+    context = (f"Het is nu {pages.DAYS[n.weekday()]} {n:%d-%m-%Y %H:%M}."
+               + (f" Gezin: {family}." if family else ""))
     messages: list[dict] = []
     for h in history:
         messages.append({"role": "user", "content": h["q"]})

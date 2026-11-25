@@ -21,6 +21,7 @@ TZ = ZoneInfo(settings.tz)
 _client = httpx.AsyncClient(timeout=15, headers={"User-Agent": "huisdisplay/0.1"})
 _cache: dict[str, tuple[float, object]] = {}
 _locks: dict[str, asyncio.Lock] = {}
+health: dict[str, dict] = {}  # per source: last fetch ok?, when, error
 
 
 _now_override: ContextVar[dt.datetime | None] = ContextVar("now_override", default=None)
@@ -52,8 +53,10 @@ async def cached(key: str, ttl: float, fn):
             val = await fn()
         except Exception as e:  # keep serving stale data on errors
             log.warning("%s failed: %s", key, e)
+            health[key] = {"ok": False, "t": time.time(), "error": str(e)[:160]}
             return hit[1] if hit else None
         _cache[key] = (time.time(), val)
+        health[key] = {"ok": True, "t": time.time(), "error": ""}
         return val
 
 

@@ -56,6 +56,8 @@ class Settings:
     reminders_list: str = field(default_factory=lambda: opt("REMINDERS_LIST", "todo.huishouden"))
     strava_client_id: str = field(default_factory=lambda: opt("STRAVA_CLIENT_ID"))
     strava_client_secret: str = field(default_factory=lambda: opt("STRAVA_CLIENT_SECRET"))
+    birthdays: str = field(default_factory=lambda: opt("BIRTHDAYS"))  # "Name|YYYY-MM-DD, ..."
+    countdowns: str = field(default_factory=lambda: opt("COUNTDOWNS"))  # "🎁 Pakjesavond|12-05|21, ..."
     shopping_list: str = field(default_factory=lambda: opt("SHOPPING_LIST", "todo.shopping_list"))
     tz: str = field(default_factory=lambda: opt("TZ", "Europe/Amsterdam"))
     hub_redirect: str = field(default_factory=lambda: opt("HUB_REDIRECT"))  # send displays to this hub (fw >= 0.1.4)

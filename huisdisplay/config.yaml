@@ -1,5 +1,5 @@
 name: Huisdisplay
-version: "0.2.2"
+version: "0.3.0"
 slug: huisdisplay
 description: Hub for the Huisdisplay e-paper screen (pages, rain, trains, calendar, voice with Claude)
 url: https://github.com/twetering/huisdisplay-addon
@@ -14,7 +14,10 @@ ports:
   8787/tcp: 8787
 ports_description:
   8787/tcp: Display API and page previews
-webui: "http://[HOST]:[PORT:8787]/"
+ingress: true
+ingress_port: 8787
+panel_icon: mdi:tablet-dashboard
+panel_title: Huisdisplay
 options:
   anthropic_api_key: ""
   stt_provider: elevenlabs
@@ -36,6 +39,8 @@ options:
   dinner_prefs: "gezin met een jong kind, afwisselend, gewone avondmaaltijd"
   strava_client_id: ""
   strava_client_secret: ""
+  birthdays: ""
+  countdowns: "🎁 Pakjesavond|12-05|21, 🎄 Kerst|12-25|19"
 schema:
   anthropic_api_key: password?
   stt_provider: list(elevenlabs|openai)
@@ -57,3 +62,5 @@ schema:
   dinner_prefs: str?
   strava_client_id: str?
   strava_client_secret: password?
+  birthdays: str?
+  countdowns: str?

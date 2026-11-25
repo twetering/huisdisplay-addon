@@ -6,7 +6,7 @@ import asyncio
 import datetime as dt
 from dataclasses import dataclass, field
 
-from . import dinner, modes, strava
+from . import dinner, fun, modes, strava
 from . import sources as src
 from .render import (BLACK, WHITE, Canvas, battery_icon, bin_icon, font, mic_icon,
                      train_icon, weather_icon)
@@ -57,7 +57,10 @@ def header(c: Canvas, ctx: Ctx, title: str):
     n = src.now()
     c.text((14, 7), title, font(15, "sans", "SemiBold"))
     tw = c.width(title, font(15, "sans", "SemiBold"))
-    c.text((14 + tw + 10, 8), f"{DAYS[n.weekday()]} {n.day} {MONTHS[n.month - 1]}", font(14, "sans", "Regular"))
+    date = f"{DAYS[n.weekday()]} {n.day} {MONTHS[n.month - 1]}"
+    if (mark := fun.season_mark(n)):
+        date += f" {mark}"
+    c.text((14 + tw + 10, 8), date, font(14, "sans", "Regular"))
     right = 386
     battery_icon(c, right - 23, 10, ctx.battery, ctx.usb)
     if ctx.usb:  # only show a clock when it will stay accurate
@@ -363,6 +366,23 @@ def reminder_msg(items: list[dict], n: dt.datetime) -> str:
     return " · ".join(one(r) for r in items)
 
 
+def strip_countdown(c: Canvas, y, cd: "fun.Countdown") -> int:
+    """'Nog 9 nachtjes slapen tot pakjesavond' with one dot per night; black on the day itself."""
+    if cd.nights == 0:
+        c.rect(14, y, 386, y + 30, fill=BLACK, outline=None, r=4)
+        c.text((24, y + 6), f"{cd.emoji}  {cd.today_text}", font(15, "sans", "Bold"), fill=WHITE)
+        return y + 38
+    c.rect(14, y, 386, y + 28, outline=BLACK, w=2, r=14)
+    c.text((26, y + 5), cd.emoji, font(16, "sans"))
+    c.text((50, y + 6), cd.text, font(14, "sans", "SemiBold"))
+    tx = 50 + c.width(cd.text, font(14, "sans", "SemiBold")) + 12
+    room = (376 - tx) // 9
+    for i in range(cd.nights if cd.nights <= room else 0):  # all the nights as dots, or none
+        cx = 376 - i * 9
+        c.d.ellipse((cx - 3, y + 11, cx + 3, y + 17), fill=BLACK)
+    return y + 36
+
+
 def strip_house(c: Canvas, y, s: dict) -> int:
     t = src.state_val(s, "sensor.alpstuga_air_quality_moni_temperature_sensor")
     opened = [s[e]["attributes"].get("friendly_name", e).replace(" Contact", "") for e in s
@@ -418,7 +438,8 @@ async def page_home(ctx: Ctx):
     c = Canvas()
     n = src.now()
     mode = modes.mode_at(n)
-    header(c, ctx, modes.TITLES[mode])
+    special = fun.today_special(n.date())
+    header(c, ctx, "Hoera!" if special and special.birthday else modes.TITLES[mode])
     states, rain, waste, hourly, cal = await asyncio.gather(
         src.ha_states(), src.rain(), src.waste(), src.ha_forecast("hourly"), src.calendar(3))
     rs = src.rain_summary(rain)
@@ -458,6 +479,9 @@ async def page_home(ctx: Ctx):
     if (wi := waste_item(waste, n)):
         y = strip_waste(c, y, wi[1])
     evening = mode in ("avond", "nacht")
+    cds = fun.all_countdowns(n.date())
+    if cds and y <= 282 - 20 - 38:
+        y = strip_countdown(c, y, cds[0])
     pkgs, todo = await asyncio.gather(src.packages(), src.reminders())
     if (pm := package_msg(pkgs, n, evening)) and y <= 282 - 20 - 36:
         y = strip_box(c, y, "PAKKET", pm)
@@ -692,8 +716,9 @@ async def page_sport(ctx: Ctx):
     c = Canvas()
     header(c, ctx, "Sport")
     if not strava.connected():
-        c.paragraph(14, 50, "Strava is nog niet gekoppeld. Open de hub in je browser op /strava.",
-                    font(14, "sans", "Medium"), 372)
+        c.text((14, 44), "🚴", font(40, "sans"))
+        c.paragraph(70, 50, "Strava is nog niet gekoppeld. Open in Home Assistant de zijbalk → Huisdisplay → "
+                    "Strava koppelen, en log daar één keer in bij Strava.", font(14, "sans", "Medium"), 316)
         page_dots(c, ctx.page)
         return c, 3600
     s = await strava.summary()
@@ -770,6 +795,10 @@ async def page_sport(ctx: Ctx):
 async def page_listening(ctx: Ctx):
     c = Canvas()
     c.rect(40, 50, 360, 250, fill=BLACK, outline=None, r=14)
+    # cat ears 🐱
+    for x0 in (64, 278):
+        c.d.polygon([(x0, 56), (x0 + 29, 16), (x0 + 58, 56)], fill=BLACK)
+        c.d.polygon([(x0 + 18, 50), (x0 + 29, 33), (x0 + 40, 50)], fill=WHITE)
     c.d.rounded_rectangle((52, 62, 348, 238), radius=10, fill=BLACK)
     # white mic on black
     tmp = Canvas()
@@ -784,9 +813,8 @@ async def page_listening(ctx: Ctx):
 async def page_thinking(ctx: Ctx):
     c = Canvas()
     c.rect(40, 50, 360, 250, fill=WHITE, outline=BLACK, w=3, r=14)
-    for i, r in enumerate((6, 6, 6)):
-        x = 172 + i * 28
-        c.d.ellipse((x - r, 118 - r, x + r, 118 + r), fill=BLACK)
+    for i in range(3):  # little paw prints walking across
+        c.text((158 + i * 42, 96 + (i % 2) * 12), "🐾", font(22, "sans"), anchor="ma")
     c.text((200, 150), "Even denken…", font(24, "serifi"), anchor="ma")
     return c, 0
 

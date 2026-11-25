@@ -25,7 +25,28 @@ _FAMILIES = {
     "serif": "InstrumentSerif-Regular.ttf",
     "serifi": "InstrumentSerif-Italic.ttf",
     "mono": "IBMPlexMono-Medium.ttf",
+    "emoji": "NotoEmoji.ttf",  # monochrome outlines: emoji that survive 1 bit
 }
+
+
+def is_emoji(ch: str) -> bool:
+    o = ord(ch)
+    return o >= 0x1F000 or 0x2600 <= o <= 0x27BF or 0x2B00 <= o <= 0x2BFF or 0x2300 <= o <= 0x23FF \
+        or o in (0x2122, 0x2139, 0x3030, 0x303D, 0x00A9, 0x00AE)
+
+
+def _runs(s: str):
+    """Split text into (is_emoji, text) runs; drop variation selectors and joiners."""
+    out: list[tuple[bool, str]] = []
+    for ch in s:
+        if ch in "\ufe0f\ufe0e\u200d":
+            continue
+        e = is_emoji(ch)
+        if out and out[-1][0] == e:
+            out[-1] = (e, out[-1][1] + ch)
+        else:
+            out.append((e, ch))
+    return out
 
 
 @lru_cache(maxsize=128)
@@ -36,7 +57,13 @@ def font(size: int, family: str = "sans", weight: str = "Medium") -> ImageFont.F
         if size <= 16 and weight in ("Regular", "Light"):
             weight = "Medium"
         f.set_variation_by_name(weight)
+    elif family == "emoji":
+        f.set_variation_by_axes([600])  # between Regular and Bold: solid at 1 bit
     return f
+
+
+def emoji_font(f: ImageFont.FreeTypeFont) -> ImageFont.FreeTypeFont:
+    return font(int(f.size), "emoji")
 
 
 # 4x4 Bayer matrix for ordered-dither "gray" fills that survive 1bpp.
@@ -51,10 +78,28 @@ class Canvas:
 
     # ---- text
     def text(self, xy, s: str, f, fill=BLACK, anchor="la"):
-        self.d.text(xy, s, font=f, fill=fill, anchor=anchor)
+        if not any(is_emoji(ch) for ch in s):
+            self.d.text(xy, s, font=f, fill=fill, anchor=anchor)
+            return
+        # Mixed text and emoji: draw run by run on a shared baseline.
+        x, y = xy
+        total = self.width(s, f)
+        if anchor[0] == "m":
+            x -= total / 2
+        elif anchor[0] == "r":
+            x -= total
+        base = y + f.getmetrics()[0] if anchor[1] == "a" else y
+        ef = emoji_font(f)
+        for emo, run in _runs(s):
+            rf = ef if emo else f
+            self.d.text((x, base), run, font=rf, fill=fill, anchor="ls")
+            x += self.d.textlength(run, font=rf)
 
     def width(self, s: str, f) -> int:
-        return int(math.ceil(self.d.textlength(s, font=f)))
+        if not any(is_emoji(ch) for ch in s):
+            return int(math.ceil(self.d.textlength(s, font=f)))
+        ef = emoji_font(f)
+        return int(math.ceil(sum(self.d.textlength(r, font=ef if e else f) for e, r in _runs(s))))
 
     def fit(self, s: str, f, maxw: int) -> str:
         if self.width(s, f) <= maxw:
