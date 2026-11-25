@@ -1,0 +1,59 @@
+name: Huisdisplay
+version: "0.2.0"
+slug: huisdisplay
+description: Hub for the Huisdisplay e-paper screen (pages, rain, trains, calendar, voice with Claude)
+url: https://github.com/twetering/huisdisplay-addon
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: application
+boot: auto
+homeassistant_api: true
+ports:
+  8787/tcp: 8787
+ports_description:
+  8787/tcp: Display API and page previews
+webui: "http://[HOST]:[PORT:8787]/"
+options:
+  anthropic_api_key: ""
+  stt_provider: elevenlabs
+  elevenlabs_api_key: ""
+  openai_api_key: ""
+  ns_api_key: ""
+  ns_station: ""
+  ns_station_name: ""
+  ns_to: ""
+  ns_toward: ""
+  gcal_ics: ""
+  postcode: ""
+  housenumber: ""
+  place: ""
+  weather_entity: weather.forecast_home
+  shopping_list: todo.shopping_list
+  reminders_list: todo.huishouden
+  dinner_auto: false
+  dinner_prefs: "gezin met een jong kind, afwisselend, gewone avondmaaltijd"
+  strava_client_id: ""
+  strava_client_secret: ""
+schema:
+  anthropic_api_key: password?
+  stt_provider: list(elevenlabs|openai)
+  elevenlabs_api_key: password?
+  openai_api_key: password?
+  ns_api_key: password?
+  ns_station: str?
+  ns_station_name: str?
+  ns_to: str?
+  ns_toward: str?
+  gcal_ics: password?
+  postcode: str?
+  housenumber: str?
+  place: str?
+  weather_entity: str
+  shopping_list: str
+  reminders_list: str
+  dinner_auto: bool
+  dinner_prefs: str?
+  strava_client_id: str?
+  strava_client_secret: password?
