@@ -58,6 +58,11 @@ class Settings:
     strava_client_secret: str = field(default_factory=lambda: opt("STRAVA_CLIENT_SECRET"))
     birthdays: str = field(default_factory=lambda: opt("BIRTHDAYS"))  # "Name|YYYY-MM-DD, ..."
     countdowns: str = field(default_factory=lambda: opt("COUNTDOWNS"))  # "🎁 Pakjesavond|12-05|21, ..."
+    chime_volume: int = field(default_factory=lambda: int(opt("CHIME_VOLUME", "2")))  # 0 off .. 3 loud
+    quiet_start: str = field(default_factory=lambda: opt("QUIET_START", "21:30"))  # no chimes from ..
+    quiet_end: str = field(default_factory=lambda: opt("QUIET_END", "07:00"))      # .. until
+    speak_answers: bool = field(default_factory=lambda: opt("SPEAK_ANSWERS", "true").lower() in ("1", "true", "yes", "ja"))
+    tts_voice: str = field(default_factory=lambda: opt("TTS_VOICE", "XrExE9yKIg1WjnnlVkGX"))  # ElevenLabs voice id
     shopping_list: str = field(default_factory=lambda: opt("SHOPPING_LIST", "todo.shopping_list"))
     tz: str = field(default_factory=lambda: opt("TZ", "Europe/Amsterdam"))
     hub_redirect: str = field(default_factory=lambda: opt("HUB_REDIRECT"))  # send displays to this hub (fw >= 0.1.4)

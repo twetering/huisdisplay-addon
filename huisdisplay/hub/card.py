@@ -51,6 +51,7 @@ CARD_SCHEMA = {
             },
         },
         "footer": {"type": "string", "description": "Optional one-line source/tip at the bottom."},
+        "speech": {"type": "string", "description": "What the display says out loud: the answer in 1-2 short, natural spoken Dutch sentences (no emoji, no lists)."},
         "sticker": {"type": "string", "description": "Optional single emoji shown as a round sticker in the top-right corner, for playful cards."},
     },
     "required": ["title", "blocks"],

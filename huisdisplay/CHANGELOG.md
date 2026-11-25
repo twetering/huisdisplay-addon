@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+- Display firmware 0.1.5: chimes, the green LED only lights during updates, hold DOWN to switch off also on USB.
+- Chimes for rain coming, reminders, waste tonight, party mornings and automation cards (`"chime": "alert"`), with quiet hours.
+- Answers are spoken out loud (ElevenLabs); switch off with `speak_answers`.
+- On battery the display sleeps through the night and wakes fresh for the morning.
+
 ## 0.3.0
 - Huisdisplay panel in the Home Assistant sidebar: display status, data sources, live previews.
 - Home Assistant entities for online state, battery, last seen, page and firmware.

@@ -176,6 +176,7 @@ SYSTEM = """Je bent de huisassistent achter een klein e-ink display (400x300, zw
 Hoe een goede kaart eruitziet:
 - Nederlands, kort, op afstand leesbaar. De titel is het antwoord zelf (max ~8 woorden), niet een herhaling van de vraag.
 - Kies de blokvorm die bij het antwoord past: rows voor vergelijkingen of kleine tabellen, big voor één getal, steps voor recepten en instructies, timeline voor tijden, icon_row voor weer per dag, text voor één of twee zinnen uitleg. Meestal 1–3 blokken.
+- Vul altijd 'speech': het display zegt dat hardop. Eén of twee korte, natuurlijke zinnen, alsof je het tegen iemand in de kamer zegt; geen opsommingen of emoji. Bij een recept: alleen de naam en tijd, de rest staat op het scherm.
 - Speelsere blokken: countdown (aftellen: number + unit zoals 'nachtjes slapen'), bars (staafjes om grootte/snelheid/aantallen te vergelijken), quote (een mooie uitspraak of gedichtje), progress (hoe ver iets is, 0–100), sticker (één grote emoji met een korte zin), emoji_row (tot 5 grote emoji met label en waarde: dieren, planeten, landen).
 - Emoji mogen overal in tekst en worden zwart-wit getekend; gebruik ze met mate (één of twee per kaart). 'sticker' op kaartniveau zet één emoji als rond plaatje in de hoek: leuk bij vragen van kinderen.
 - In dit gezin wonen kinderen. Klinkt de vraag als van een kind (dino's, pokémon, dieren, 'hoeveel nachtjes nog'), antwoord dan speels, eenvoudig en enthousiast, met een sticker en bij voorkeur bars, emoji_row of countdown.
@@ -323,6 +324,22 @@ async def ask(query: str, history: list[dict]) -> dict:
     return {"query": query, "title": "Dat duurde te lang", "blocks": [{"type": "text", "text": "Probeer het nog eens."}]}
 
 
+async def speak(text: str) -> bytes | None:
+    """Spoken answer as raw 16 kHz mono PCM (what the firmware plays), via ElevenLabs."""
+    if not (settings.speak_answers and settings.elevenlabs_api_key and text):
+        return None
+    try:
+        r = await src._client.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{settings.tts_voice}", params={"output_format": "pcm_16000"},
+            headers={"xi-api-key": settings.elevenlabs_api_key},
+            json={"text": text[:400], "model_id": "eleven_flash_v2_5", "language_code": "nl"}, timeout=20)
+        r.raise_for_status()
+        return r.content
+    except Exception as e:
+        log.warning("TTS failed: %s", e)
+        return None
+
+
 async def handle_voice(pcm: bytes, fmt: str, device) -> tuple[dict, bytes | None]:
     wav = pcm_to_wav(pcm, fmt)
     (settings.data_dir / "last_voice.wav").write_bytes(wav)  # only the latest, for debugging
@@ -349,4 +366,5 @@ async def handle_voice(pcm: bytes, fmt: str, device) -> tuple[dict, bytes | None
     log.info("Claude %.1fs: %s", time.time() - t1, card.get("title"))
     device.history = hist + [{"t": time.time(), "q": query, "a": json.dumps(
         {k: card.get(k) for k in ("title", "blocks")}, ensure_ascii=False)[:1500]}]
-    return card, None
+    audio = await speak(card.get("speech") or card.get("title", ""))
+    return card, audio

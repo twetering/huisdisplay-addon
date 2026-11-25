@@ -20,6 +20,9 @@ Leave a setting empty to switch that part off.
 | `dinner_auto`, `dinner_prefs` | Let Claude suggest a recipe every afternoon, and for whom |
 | `strava_client_id`, `strava_client_secret` | Optional Strava app (callback domain: your Home Assistant IP); connect from the Huisdisplay panel |
 | `birthdays` | `Name|YYYY-MM-DD`, comma separated: countdown 30 days before, a party on the day |
+| `chime_volume` | Sound for important moments, 0 (off) to 3 (loud): rain coming, a reminder due, waste tonight, a party morning, or a card from an automation with `"chime": "alert"` |
+| `quiet_start`, `quiet_end` | No chimes in between (alerts from automations still sound) |
+| `speak_answers`, `tts_voice` | Say answers out loud (ElevenLabs voice id) |
 | `countdowns` | `emoji Name|MM-DD|days`, comma separated: e.g. `🎁 Pakjesavond|12-05|21` |
 
 The rain radar uses the home location from Home Assistant.

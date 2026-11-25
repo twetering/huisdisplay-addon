@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 
-from . import dinner, pages, sources, strava
+from . import chime, dinner, pages, sources, strava
 from .card import paginate, render_card
 from .config import settings
 
@@ -54,6 +54,8 @@ class Device:
     last_seen: float = 0
     ip: str = ""
     host: str = ""
+    chimed: set = field(default_factory=set)  # events this display already chimed for
+    pending_chime: str | None = None          # asked for by a pushed card
     history: list = field(default_factory=list)  # recent assistant turns for follow-up questions
 
 
@@ -233,7 +235,13 @@ async def api_frame(req: Request, page: str = "home", nav: str = ""):
     if nav:
         navigate(d, nav)
     c, n = await render_for(d, d.page)
-    return frame_response(c, n, d, d.page, None if nav else req.headers.get("If-None-Match"))
+    if not d.usb and not nav and (night := chime.night_wait(sources.now())):
+        n = night  # on battery: sleep through the night, the morning page will be fresh
+    extra = None
+    if d.id not in ("preview", "test") and (ch := await chime.decide(d)):
+        extra = {"X-Chime": ch}
+    return frame_response(c, n, d, d.page, None if (nav or extra) else req.headers.get("If-None-Match"),
+                          extra_headers=extra)
 
 
 @app.post("/api/voice")
@@ -265,6 +273,8 @@ _voice_times: collections.deque = collections.deque()
 
 
 def show_card(d: Device, card: dict):
+    if card.get("chime") in ("ding", "alert", "party", "soft"):
+        d.pending_chime = card["chime"]
     if card.get("page") in pages.PAGES:
         d.page, d.card = card["page"], None
         return
