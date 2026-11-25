@@ -29,6 +29,8 @@ from .config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("hub")
+# httpx logs full URLs at INFO, including the secret calendar address: keep it quiet.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 app = FastAPI(title="Huisdisplay hub")
 
 CARD_TTL = 300  # seconds an answer stays on screen before going back to "Nu"
