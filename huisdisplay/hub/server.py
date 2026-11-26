@@ -213,6 +213,26 @@ async def _startup():
         asyncio.create_task(_stdin_reader())
 
 
+@app.post("/api/jingle")
+async def api_jingle(req: Request):
+    """Upload your own announcement jingle (16-bit WAV) from the panel."""
+    if not trusted(req):
+        return forbidden()
+    data = await req.body()
+    if not data:
+        (settings.data_dir / "jingle.wav").unlink(missing_ok=True)
+        return {"ok": True, "jingle": "standaard"}
+    if len(data) > 3_000_000 or data[:4] != b"RIFF":
+        return Response("Alleen WAV-bestanden tot 3 MB", status_code=400)
+    tmp = settings.data_dir / "jingle.tmp.wav"
+    tmp.write_bytes(data)
+    if not audio._load_wav(tmp):
+        tmp.unlink()
+        return Response("Dit WAV-bestand kan ik niet lezen (16-bit PCM nodig)", status_code=400)
+    tmp.replace(settings.data_dir / "jingle.wav")
+    return {"ok": True, "jingle": "eigen"}
+
+
 @app.post("/api/say")
 async def api_say(req: Request, body: dict):
     if not trusted(req):
@@ -537,7 +557,8 @@ INTERCOM_HTML = ("""<h2>Intercom</h2><div class=panel style='padding:14px'>
 <button style='padding:9px 16px;border:0;border-radius:8px;background:var(--ink);color:var(--bg);font:inherit;font-weight:600;cursor:pointer'>Zeg het</button></form>
 <div style='display:flex;gap:6px;flex-wrap:wrap;margin-top:10px'>
 """ + "".join(f"<button class=chip data-say='{html.escape(t)}'>{html.escape(t)}</button>" for t in INTERCOM_CHIPS) + """
-<button class=chip data-demo=omroep>🚆 Voorbeeld omroep</button></div>
+<button class=chip data-demo=omroep>🚆 Voorbeeld omroep</button>
+<label class=chip style='cursor:pointer'>🎵 Eigen omroepdeuntje (WAV)<input id=jingle type=file accept='.wav,audio/wav' hidden></label></div>
 <div id=say_msg class=muted style='margin-top:8px;min-height:1.2em'></div></div>
 <script>
 const post = async (body) => {
@@ -549,7 +570,12 @@ const post = async (body) => {
 document.getElementById('say').addEventListener('submit', e => { e.preventDefault();
   post({say: document.getElementById('say_text').value, from: document.getElementById('say_from').value});
   document.getElementById('say_text').value = ''; });
-document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () =>
+document.getElementById('jingle').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const m = document.getElementById('say_msg'); m.textContent = 'Uploaden…';
+  const r = await fetch('api/jingle', {method:'POST', body: f});
+  m.textContent = r.ok ? 'Deuntje opgeslagen. Druk op Voorbeeld omroep om het te horen.' : await r.text(); });
+document.querySelectorAll('button.chip').forEach(b => b.addEventListener('click', () =>
   post(b.dataset.demo ? {demo: b.dataset.demo} : {say: b.dataset.say, from: document.getElementById('say_from').value})));
 </script>
 """)

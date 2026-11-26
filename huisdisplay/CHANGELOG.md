@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.1
+- Upload your own announcement jingle (WAV) from the panel.
+
 ## 0.6.0
 - Chess position of the day: openings, traps and mini-games to set up and play from.
 - Air-quality alert on the home page with a soft chime (fine dust, humidity, or the air-quality sensor).
