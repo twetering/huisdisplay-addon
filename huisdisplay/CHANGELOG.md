@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.2
+- Announcer voice settings: stability and similarity (defaults 0.2 / 0.95, good for cloned voices).
+
 ## 0.6.1
 - Upload your own announcement jingle (WAV) from the panel.
 

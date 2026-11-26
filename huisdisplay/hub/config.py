@@ -67,6 +67,8 @@ class Settings:
     podcasts: str = field(default_factory=lambda: opt("PODCASTS"))  # "Name|feed-url, ..."
     announce_delays: bool = field(default_factory=lambda: opt("ANNOUNCE_DELAYS", "true").lower() in ("1", "true", "yes", "ja"))
     announcer_voice: str = field(default_factory=lambda: opt("ANNOUNCER_VOICE", "onwK4e9ZLuTAKqWW03F9"))  # Daniel, steady broadcaster
+    announcer_stability: float = field(default_factory=lambda: float(opt("ANNOUNCER_STABILITY", "0.2")))    # low = expressive
+    announcer_similarity: float = field(default_factory=lambda: float(opt("ANNOUNCER_SIMILARITY", "0.95")))  # high = close to the clone
     announce_min_delay: int = field(default_factory=lambda: int(opt("ANNOUNCE_MIN_DELAY", "1")))  # minutes
     air_pm25_sensor: str = field(default_factory=lambda: opt("AIR_PM25_SENSOR", "sensor.alpstuga_air_quality_moni_pm2_5_density"))
     air_humidity_sensor: str = field(default_factory=lambda: opt("AIR_HUMIDITY_SENSOR", "sensor.alpstuga_air_quality_moni_humidity_sensor"))

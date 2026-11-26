@@ -65,19 +65,24 @@ def station_gong() -> bytes:
     return (np.clip(sig, -1, 1) * 32767).astype("<i2").tobytes()
 
 
-async def tts(text: str, voice: str | None = None, max_chars: int = 400) -> bytes | None:
+async def tts(text: str, voice: str | None = None, max_chars: int = 400, settings_: dict | None = None) -> bytes | None:
     if not (settings.elevenlabs_api_key and text):
         return None
     try:
         r = await src._client.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice or settings.tts_voice}",
             params={"output_format": "pcm_16000"}, headers={"xi-api-key": settings.elevenlabs_api_key},
-            json={"text": text[:max_chars], "model_id": "eleven_flash_v2_5", "language_code": "nl"}, timeout=20)
+            json={"text": text[:max_chars], "model_id": "eleven_flash_v2_5", "language_code": "nl",
+                  **({"voice_settings": settings_} if settings_ else {})}, timeout=20)
         r.raise_for_status()
         return r.content
     except Exception as e:
         log.warning("TTS failed: %s", e)
         return None
+
+
+def announcer_settings() -> dict:
+    return {"stability": settings.announcer_stability, "similarity_boost": settings.announcer_similarity}
 
 
 def _say_time(t: dt.datetime) -> str:
@@ -111,7 +116,7 @@ async def train_announcement(device) -> tuple[bytes, dict] | None:
             text = (f"Attentie. {what} heeft ongeveer {d['delay']} minuten vertraging. "
                     f"Verwachte vertrektijd {_say_time(d['actual'])}, spoor {d['track']}.")
             title = f"{d['planned']:%H:%M} heeft +{d['delay']} min"
-        speech = await tts(text, settings.announcer_voice)
+        speech = await tts(text, settings.announcer_voice, settings_=announcer_settings())
         card = {"kicker": "Omroep", "title": title, "sticker": "🚆",
                 "blocks": [{"type": "text", "text": text}], "keep_seconds": 300}
         return station_gong() + (speech or b""), card
@@ -122,7 +127,7 @@ async def demo_announcement() -> tuple[bytes, dict]:
     """A sample announcement to hear what it sounds like."""
     text = ("Attentie. De sprinter naar Utrecht Centraal van 7 uur 41 heeft ongeveer 4 minuten vertraging. "
             "Verwachte vertrektijd 7 uur 45, spoor 1.")
-    speech = await tts(text, settings.announcer_voice)
+    speech = await tts(text, settings.announcer_voice, settings_=announcer_settings())
     card = {"kicker": "Omroep · voorbeeld", "title": "07:41 heeft +4 min", "sticker": "🚆",
             "blocks": [{"type": "text", "text": text}], "keep_seconds": 120}
     return station_gong() + (speech or b""), card

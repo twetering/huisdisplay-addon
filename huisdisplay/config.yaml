@@ -1,5 +1,5 @@
 name: Huisdisplay
-version: "0.6.1"
+version: "0.6.2"
 slug: huisdisplay
 description: Hub for the Huisdisplay e-paper screen (pages, rain, trains, calendar, voice with Claude)
 url: https://github.com/twetering/huisdisplay-addon
@@ -51,6 +51,8 @@ options:
   announce_delays: true
   announcer_voice: onwK4e9ZLuTAKqWW03F9
   announce_min_delay: 1
+  announcer_stability: 0.2
+  announcer_similarity: 0.95
   podcasts: ""
   news_feed: https://feeds.nos.nl/nosnieuwsalgemeen
   countdowns: "🎁 Pakjesavond|12-05|21, 🎄 Kerst|12-25|19"
@@ -87,3 +89,5 @@ schema:
   podcasts: str?
   news_feed: url
   announce_min_delay: int(0,30)
+  announcer_stability: float(0,1)
+  announcer_similarity: float(0,1)
