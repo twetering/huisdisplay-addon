@@ -23,7 +23,7 @@ Leave a setting empty to switch that part off.
 | `chime_volume` | Sound for important moments, 0 (off) to 3 (loud): rain coming, a reminder due, waste tonight, a party morning, or a card from an automation with `"chime": "alert"` |
 | `quiet_start`, `quiet_end` | No chimes in between (alerts from automations still sound) |
 | `speak_answers`, `tts_voice` | Say answers out loud (ElevenLabs voice id) |
-| `announce_delays`, `announcer_voice` | Weekday mornings: a station gong and an announcement when a train within 45 minutes is 5+ minutes late or cancelled |
+| `announce_delays`, `announcer_voice`, `announce_min_delay` | Weekday mornings: a jingle and an announcement when a train within 45 minutes is late (from `announce_min_delay` minutes) or cancelled. Put your own jingle at `/share/huisdisplay/jingle.wav` (16-bit WAV) |
 | `podcasts` | `Name|feed-url`, comma separated: newest episodes on the news page |
 | `news_feed` | RSS feed for the headlines (default: NOS) |
 | `countdowns` | `emoji Name|MM-DD|days`, comma separated: e.g. `🎁 Pakjesavond|12-05|21` |

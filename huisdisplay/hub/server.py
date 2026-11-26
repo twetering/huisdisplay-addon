@@ -153,6 +153,12 @@ async def handle_message(msg) -> int:
     if isinstance(msg, str):
         msg = {"say": msg}
     targets = real_devices() or list(devices.values())
+    if msg.get("demo") == "omroep":
+        pcm, card = await audio.demo_announcement()
+        for d in targets:
+            show_card(d, card)
+            d.pending_audio = pcm
+        return len(targets)
     if msg.get("page"):
         for d in targets:
             d.page, d.card = msg["page"], None
@@ -506,9 +512,12 @@ table{{border-collapse:collapse;width:100%}}td{{padding:8px 10px 8px 0;border-bo
 figure{{margin:0}}img{{width:100%;aspect-ratio:4/3;display:block;background:var(--paper);border-radius:8px;border:1px solid var(--line);mix-blend-mode:normal}}
 figcaption{{font-size:12px;color:var(--muted);margin-top:4px}}.cols{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}
 @media (max-width:760px){{.cols{{grid-template-columns:1fr}}}}a{{color:inherit}}
+.chip{{padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font:inherit;font-size:13px;cursor:pointer}}
+.chip:hover,button:focus-visible{{border-color:var(--ink)}}
 </style>
 <div class=top><div><h1>Huisdisplay</h1><span class=muted>Hub {html.escape(firmware_version() and 'met firmware ' + firmware_version())} · modus {html.escape(pages.current_mode())} · Strava {strava_state}</span></div>
 <div class=muted>{strava_link}</div></div>
+{INTERCOM_HTML}
 <div class=cols>
 <div><h2>Display</h2><div class=panel><table>{dev_rows}</table></div></div>
 <div><h2>Bronnen</h2><div class=panel><table>{src_rows or "<tr><td class=muted>Nog niets opgehaald.</td></tr>"}</table></div></div>
@@ -518,6 +527,32 @@ figcaption{{font-size:12px;color:var(--muted);margin-top:4px}}.cols{{display:gri
 <h2>Kaartjes</h2><div class=grid>{card_imgs}</div>
 <h2>Spraak</h2><div class=grid>{voice_imgs}</div>
 <p class=muted style='margin-top:24px'>Previews tonen live data. Deze pagina ververst elke twee minuten.</p>"""
+
+
+INTERCOM_CHIPS = ("Het eten is klaar!", "Bedtijd, Thomas!", "Kom je even naar beneden?", "Tanden poetsen!")
+INTERCOM_HTML = ("""<h2>Intercom</h2><div class=panel style='padding:14px'>
+<form id=say style='display:flex;gap:8px;flex-wrap:wrap'>
+<input id=say_text placeholder='Wat moet het display zeggen?' required style='flex:3 1 260px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit'>
+<input id=say_from placeholder='van (bijv. zolder)' style='flex:1 1 120px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit'>
+<button style='padding:9px 16px;border:0;border-radius:8px;background:var(--ink);color:var(--bg);font:inherit;font-weight:600;cursor:pointer'>Zeg het</button></form>
+<div style='display:flex;gap:6px;flex-wrap:wrap;margin-top:10px'>
+""" + "".join(f"<button class=chip data-say='{html.escape(t)}'>{html.escape(t)}</button>" for t in INTERCOM_CHIPS) + """
+<button class=chip data-demo=omroep>🚆 Voorbeeld omroep</button></div>
+<div id=say_msg class=muted style='margin-top:8px;min-height:1.2em'></div></div>
+<script>
+const post = async (body) => {
+  const m = document.getElementById('say_msg'); m.textContent = 'Versturen…';
+  try { const r = await fetch('api/say', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)});
+        m.textContent = r.ok ? 'Verstuurd. Op USB hoor je het binnen 10 seconden.' : 'Lukte niet (' + r.status + ')'; }
+  catch (e) { m.textContent = 'Lukte niet: ' + e; }
+};
+document.getElementById('say').addEventListener('submit', e => { e.preventDefault();
+  post({say: document.getElementById('say_text').value, from: document.getElementById('say_from').value});
+  document.getElementById('say_text').value = ''; });
+document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () =>
+  post(b.dataset.demo ? {demo: b.dataset.demo} : {say: b.dataset.say, from: document.getElementById('say_from').value})));
+</script>
+""")
 
 
 _demo_card = {

@@ -11,6 +11,7 @@ import logging
 import math
 
 import numpy as np
+from pathlib import Path
 
 from . import sources as src
 from .config import settings
@@ -28,8 +29,36 @@ def _bell(freq: float, secs: float, amp: float = 0.32) -> np.ndarray:
     return wave * env * amp
 
 
+JINGLE_PATHS = [Path("/share/huisdisplay/jingle.wav"), settings.data_dir / "jingle.wav"]
+
+
+def _load_wav(path: Path) -> bytes | None:
+    """Any PCM WAV -> 16 kHz mono s16le (what the firmware plays)."""
+    import wave
+    try:
+        with wave.open(str(path)) as w:
+            ch, rate, width, frames = w.getnchannels(), w.getframerate(), w.getsampwidth(), w.readframes(w.getnframes())
+    except Exception as e:
+        log.warning("jingle %s unreadable: %s", path, e)
+        return None
+    if width != 2:
+        log.warning("jingle %s: only 16-bit WAV is supported", path)
+        return None
+    a = np.frombuffer(frames, "<i2").astype(np.float32)
+    if ch > 1:
+        a = a.reshape(-1, ch).mean(axis=1)
+    if rate != RATE:
+        x = np.linspace(0, len(a) - 1, int(len(a) * RATE / rate))
+        a = np.interp(x, np.arange(len(a)), a)
+    return np.clip(a, -32768, 32767).astype("<i2").tobytes()
+
+
 def station_gong() -> bytes:
-    """Three descending bell notes (our own, in the spirit of a station announcement)."""
+    """The jingle before an announcement: your own WAV (/share/huisdisplay/jingle.wav) if present,
+    otherwise three descending bell notes of our own."""
+    for pth in JINGLE_PATHS:
+        if pth.exists() and (pcm := _load_wav(pth)):
+            return pcm
     notes = [(784, 0.55), (659, 0.55), (523, 1.1)]  # G5 E5 C5
     gap = np.zeros(int(RATE * 0.04))
     sig = np.concatenate([np.concatenate([_bell(f, d), gap]) for f, d in notes] + [np.zeros(int(RATE * 0.25))])
@@ -56,7 +85,7 @@ def _say_time(t: dt.datetime) -> str:
 
 
 async def train_announcement(device) -> tuple[bytes, dict] | None:
-    """Weekday mornings: announce a delay (5+ min) or cancellation of a train leaving within 45 min,
+    """Weekday mornings: announce a delay or cancellation of a train leaving within 45 min,
     once per train, like on the platform. Returns (pcm, card) or None."""
     n = src.now()
     if not settings.announce_delays or n.weekday() >= 5 or not (6 <= n.hour < 10):
@@ -67,9 +96,10 @@ async def train_announcement(device) -> tuple[bytes, dict] | None:
     for d in data["departures"]:
         if not (n < d["planned"] <= n + dt.timedelta(minutes=45)):
             continue
-        if not (d["cancelled"] or d["delay"] >= 5):
+        if not (d["cancelled"] or d["delay"] >= settings.announce_min_delay):
             continue
-        key = f"train:{d['planned']:%Y%m%d%H%M}:{'x' if d['cancelled'] else d['delay'] // 5}"
+        # once per train, and again only if the delay grows by a few minutes
+        key = f"train:{d['planned']:%Y%m%d%H%M}:{'x' if d['cancelled'] else d['delay'] // 3}"
         if key in device.chimed:
             continue
         device.chimed.add(key)
@@ -86,3 +116,13 @@ async def train_announcement(device) -> tuple[bytes, dict] | None:
                 "blocks": [{"type": "text", "text": text}], "keep_seconds": 300}
         return station_gong() + (speech or b""), card
     return None
+
+
+async def demo_announcement() -> tuple[bytes, dict]:
+    """A sample announcement to hear what it sounds like."""
+    text = ("Attentie. De sprinter naar Utrecht Centraal van 7 uur 41 heeft ongeveer 4 minuten vertraging. "
+            "Verwachte vertrektijd 7 uur 45, spoor 1.")
+    speech = await tts(text, settings.announcer_voice)
+    card = {"kicker": "Omroep · voorbeeld", "title": "07:41 heeft +4 min", "sticker": "🚆",
+            "blocks": [{"type": "text", "text": text}], "keep_seconds": 120}
+    return station_gong() + (speech or b""), card

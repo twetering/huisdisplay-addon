@@ -66,7 +66,11 @@ class Settings:
     news_feed: str = field(default_factory=lambda: opt("NEWS_FEED", "https://feeds.nos.nl/nosnieuwsalgemeen"))
     podcasts: str = field(default_factory=lambda: opt("PODCASTS"))  # "Name|feed-url, ..."
     announce_delays: bool = field(default_factory=lambda: opt("ANNOUNCE_DELAYS", "true").lower() in ("1", "true", "yes", "ja"))
-    announcer_voice: str = field(default_factory=lambda: opt("ANNOUNCER_VOICE", "JBFqnCBsd6RMkjVDRZzb"))
+    announcer_voice: str = field(default_factory=lambda: opt("ANNOUNCER_VOICE", "onwK4e9ZLuTAKqWW03F9"))  # Daniel, steady broadcaster
+    announce_min_delay: int = field(default_factory=lambda: int(opt("ANNOUNCE_MIN_DELAY", "1")))  # minutes
+    air_pm25_sensor: str = field(default_factory=lambda: opt("AIR_PM25_SENSOR", "sensor.alpstuga_air_quality_moni_pm2_5_density"))
+    air_humidity_sensor: str = field(default_factory=lambda: opt("AIR_HUMIDITY_SENSOR", "sensor.alpstuga_air_quality_moni_humidity_sensor"))
+    air_quality_sensor: str = field(default_factory=lambda: opt("AIR_QUALITY_SENSOR", "sensor.luchtkwaliteit_woonkamer"))
     shopping_list: str = field(default_factory=lambda: opt("SHOPPING_LIST", "todo.shopping_list"))
     tz: str = field(default_factory=lambda: opt("TZ", "Europe/Amsterdam"))
     hub_redirect: str = field(default_factory=lambda: opt("HUB_REDIRECT"))  # send displays to this hub (fw >= 0.1.4)

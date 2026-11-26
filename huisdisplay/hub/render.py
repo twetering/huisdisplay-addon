@@ -25,7 +25,8 @@ _FAMILIES = {
     "serif": "InstrumentSerif-Regular.ttf",
     "serifi": "InstrumentSerif-Italic.ttf",
     "mono": "IBMPlexMono-Medium.ttf",
-    "emoji": "NotoEmoji.ttf",  # monochrome outlines: emoji that survive 1 bit
+    "emoji": "NotoEmoji.ttf",
+    "symbols": "NotoSansSymbols2.ttf",  # chess pieces  # monochrome outlines: emoji that survive 1 bit
 }
 
 

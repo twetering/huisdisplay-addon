@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+- Chess position of the day: openings, traps and mini-games to set up and play from.
+- Air-quality alert on the home page with a soft chime (fine dust, humidity, or the air-quality sensor).
+- Sunrise and sunset on the weather page.
+- Intercom form and quick buttons in the Huisdisplay panel, plus an announcer demo button.
+- Announcer: every delay from 1 minute (setting), own jingle from /share/huisdisplay/jingle.wav, broadcaster voice.
+
 ## 0.5.0
 - Intercom: `hassio.addon_stdin` (or `/api/say`) makes the display speak a message.
 - Station announcer: gong + announcement for morning train delays and cancellations.

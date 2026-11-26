@@ -154,3 +154,22 @@ async def pokemon_fact(pk: dict) -> str:
     if text:
         f.write_text(json.dumps({"day": day, "id": pk["id"], "text": text}, ensure_ascii=False))
     return text
+
+
+def air_alert(states: dict) -> tuple[str, str] | None:
+    """('Zet even een raam open', 'fijnstof 32 µg/m³') when the living-room air is poor."""
+    def num(eid):
+        try:
+            return float(states[eid]["state"])
+        except (KeyError, ValueError):
+            return None
+    pm = num(settings.air_pm25_sensor)
+    hum = num(settings.air_humidity_sensor)
+    label = str(states.get(settings.air_quality_sensor, {}).get("state", "")).lower()
+    if pm is not None and pm >= 50 or label in ("slecht", "zeer slecht", "poor", "very poor"):
+        return "Zet een raam open, de lucht is slecht", f"fijnstof {pm:.0f} µg/m³" if pm is not None else label
+    if pm is not None and pm >= 25 or label in ("matig", "moderate"):
+        return "Even luchten? De lucht wordt minder", f"fijnstof {pm:.0f} µg/m³" if pm is not None else label
+    if hum is not None and hum >= 70:
+        return "Het is vochtig binnen, even luchten", f"vochtigheid {hum:.0f}%"
+    return None

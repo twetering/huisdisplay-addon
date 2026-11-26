@@ -22,7 +22,7 @@ COND_NL = {
 }
 
 ROTATION = ["home", "weer", "trein", "agenda", "huis", "afval"]  # every rotating page (order varies, see rotation())
-TITLES = {"nieuws": "Nieuws", "kunst": "Kunst", "pokemon": "Pokémon", "sport": "Sport", "home": "Nu", "weer": "Weer", "trein": "Trein", "agenda": "Agenda", "huis": "Huis",
+TITLES = {"schaak": "Schaak", "nieuws": "Nieuws", "kunst": "Kunst", "pokemon": "Pokémon", "sport": "Sport", "home": "Nu", "weer": "Weer", "trein": "Trein", "agenda": "Agenda", "huis": "Huis",
           "afval": "Afval", "answer": "Antwoord", "recept": "Recept"}
 
 
@@ -167,6 +167,17 @@ def rain_hint(rs: dict, hourly: list[dict]) -> str:
         if (h.get("precipitation") or 0) >= 0.3 or (h.get("precipitation_probability") or 0) >= 60:
             return f"Regen verwacht rond {t:%H}:00"
     return "Blijft droog"
+
+
+def sun_times(states: dict) -> str:
+    """'zon 8:18–16:33' (today's or the next rise/set from sun.sun)."""
+    a = states.get("sun.sun", {}).get("attributes", {})
+    try:
+        rise = dt.datetime.fromisoformat(a["next_rising"]).astimezone(src.TZ)
+        sets = dt.datetime.fromisoformat(a["next_setting"]).astimezone(src.TZ)
+    except (KeyError, ValueError):
+        return ""
+    return f"☀ op {rise:%-H:%M} · onder {sets:%-H:%M}"
 
 
 def blk_weather_now(c: Canvas, x, y, w, weather: dict, hourly: list[dict], rs: dict) -> int:
@@ -482,6 +493,8 @@ async def page_home(ctx: Ctx):
     cds = fun.all_countdowns(n.date())
     if cds and y <= 282 - 20 - 38:
         y = strip_countdown(c, y, cds[0])
+    if (air := fun.air_alert(states)) and y <= 282 - 20 - 36:
+        y = strip_box(c, y, "LUCHT", f"{air[0]} · {air[1]}")
     pkgs, todo = await asyncio.gather(src.packages(), src.reminders())
     if (pm := package_msg(pkgs, n, evening)) and y <= 282 - 20 - 36:
         y = strip_box(c, y, "PAKKET", pm)
@@ -524,6 +537,8 @@ async def page_weer(ctx: Ctx):
         rain_graph(c, 14, 90, 372, 82, rain, labels=True, dots=4)
         c.line(14, 182, 386, 182)
         strip_hourly(c, 190, hourly, cols=5, step=2)
+        if (st := sun_times(states)):
+            c.text((386, 40), st, font(12, "sans", "Medium"), anchor="ra")
         page_dots(c, ctx.page)
         return c, ctx.interval
     # Dry: no empty radar, show the day instead.
@@ -545,6 +560,8 @@ async def page_weer(ctx: Ctx):
     c.line(14, 156, 386, 156)
     strip_hourly(c, 166, hourly, cols=7, step=1)
     c.text((14, 252), "Buienradar: droog, komende 2 uur", font(12, "sans", "Regular"))
+    if (st := sun_times(states)):
+        c.text((386, 252), st, font(12, "sans", "Medium"), anchor="ra")
     page_dots(c, ctx.page)
     return c, max(ctx.interval, 300) if not ctx.usb else ctx.interval
 
@@ -889,6 +906,38 @@ async def page_pokemon(ctx: Ctx):
     return c, 3600
 
 
+async def page_schaak(ctx: Ctx):
+    from . import schaak
+    c = Canvas()
+    header(c, ctx, "Schaak")
+    title, board, tip, num, moves = schaak.of_the_day(src.now().date())
+    schaak.draw_board(c, board, 22, 38, 29)
+    x, w = 266, 122
+    c.text((x, 38), f"STELLING VAN DE DAG", font(10, "sans", "SemiBold"))
+    y = 52
+    for ln in c.wrap(title, font(21, "serifi"), w, 3):
+        c.text((x, y), ln, font(21, "serifi"))
+        y += 22
+    y += 6
+    turn = "Wit aan zet" if board.turn else "Zwart aan zet"
+    tw = c.width(turn, font(11, "sans", "Bold")) + 14
+    if board.turn:
+        c.rect(x, y, x + tw, y + 18, outline=BLACK, w=2, r=9)
+        c.text((x + tw // 2, y + 2), turn, font(11, "sans", "Bold"), anchor="ma")
+    else:
+        c.rect(x, y, x + tw, y + 18, fill=BLACK, outline=None, r=9)
+        c.text((x + tw // 2, y + 2), turn, font(11, "sans", "Bold"), fill=WHITE, anchor="ma")
+    y += 28
+    y = c.paragraph(x, y, tip, font(12, "sans", "Medium"), w, 1.25, 7)
+    if moves:
+        nl = moves.replace("N", "P").replace("B", "L").replace("R", "T").replace("Q", "D").replace("K", "K")
+        parts = nl.split()
+        txt = " ".join((f"{i // 2 + 1}.{m}" if i % 2 == 0 else m) for i, m in enumerate(parts))
+        c.paragraph(x, max(y + 4, 236), txt, font(10, "sans", "Regular"), w, 1.2, 3)
+    page_dots(c, ctx.page)
+    return c, 3600
+
+
 # ------------------------------------------------------------------ voice states
 async def page_listening(ctx: Ctx):
     c = Canvas()
@@ -927,5 +976,5 @@ async def page_message(ctx: Ctx, title: str, body: str):
 PAGES = {
     "home": page_home, "weer": page_weer, "trein": page_trein, "agenda": page_agenda,
     "huis": page_huis, "afval": page_afval, "sport": page_sport, "nieuws": page_nieuws, "kunst": page_kunst,
-    "pokemon": page_pokemon, "listening": page_listening, "thinking": page_thinking,
+    "pokemon": page_pokemon, "schaak": page_schaak, "listening": page_listening, "thinking": page_thinking,
 }

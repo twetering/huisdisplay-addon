@@ -63,6 +63,9 @@ async def decide(device) -> str | None:
     for r in src.peek("ha:reminders") or []:
         if r["timed"] and r["due"] and abs((r["due"] - n).total_seconds()) < 300 and _first(device, f"rem:{r['uid']}"):
             return f"ding;{amp}"
+    states = src.peek("ha:states") or {}
+    if fun.air_alert(states) and _first(device, f"air:{n:%Y%m%d}:{n.hour // 3}"):
+        return f"soft;{amp}"
     if 18 <= n.hour < 21:
         tomorrow = n.date() + dt.timedelta(days=1)
         for w in src.peek("waste") or []:
