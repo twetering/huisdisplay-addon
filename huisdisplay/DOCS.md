@@ -23,6 +23,9 @@ Leave a setting empty to switch that part off.
 | `chime_volume` | Sound for important moments, 0 (off) to 3 (loud): rain coming, a reminder due, waste tonight, a party morning, or a card from an automation with `"chime": "alert"` |
 | `quiet_start`, `quiet_end` | No chimes in between (alerts from automations still sound) |
 | `speak_answers`, `tts_voice` | Say answers out loud (ElevenLabs voice id) |
+| `announce_delays`, `announcer_voice` | Weekday mornings: a station gong and an announcement when a train within 45 minutes is 5+ minutes late or cancelled |
+| `podcasts` | `Name|feed-url`, comma separated: newest episodes on the news page |
+| `news_feed` | RSS feed for the headlines (default: NOS) |
 | `countdowns` | `emoji Name|MM-DD|days`, comma separated: e.g. `🎁 Pakjesavond|12-05|21` |
 
 The rain radar uses the home location from Home Assistant.
@@ -31,3 +34,20 @@ The **Huisdisplay** panel in the sidebar shows the display's status, every data 
 
 The add-on also keeps `binary_sensor.huisdisplay_online`, `sensor.huisdisplay_battery`, `sensor.huisdisplay_last_seen`, `sensor.huisdisplay_page` and `sensor.huisdisplay_firmware` up to date, for dashboards and automations. Firmware updates for the display
 are served from this add-on: the display installs them by itself.
+
+## Intercom
+
+Let the display say something from anywhere in Home Assistant (a script, an automation, a dashboard button):
+
+```yaml
+action: hassio.addon_stdin
+data:
+  addon: 0cda7abf_huisdisplay
+  input:
+    say: "Het eten is klaar!"
+    from: zolder        # optional, shown on the card
+    chime: ding         # optional: ding, soft, alert, party
+```
+
+`input` can also carry `card` (a card like the assistant makes) or `page`. On USB the display
+checks every 10 seconds; on battery the message waits until it wakes.

@@ -63,6 +63,10 @@ class Settings:
     quiet_end: str = field(default_factory=lambda: opt("QUIET_END", "07:00"))      # .. until
     speak_answers: bool = field(default_factory=lambda: opt("SPEAK_ANSWERS", "true").lower() in ("1", "true", "yes", "ja"))
     tts_voice: str = field(default_factory=lambda: opt("TTS_VOICE", "XrExE9yKIg1WjnnlVkGX"))  # ElevenLabs voice id
+    news_feed: str = field(default_factory=lambda: opt("NEWS_FEED", "https://feeds.nos.nl/nosnieuwsalgemeen"))
+    podcasts: str = field(default_factory=lambda: opt("PODCASTS"))  # "Name|feed-url, ..."
+    announce_delays: bool = field(default_factory=lambda: opt("ANNOUNCE_DELAYS", "true").lower() in ("1", "true", "yes", "ja"))
+    announcer_voice: str = field(default_factory=lambda: opt("ANNOUNCER_VOICE", "JBFqnCBsd6RMkjVDRZzb"))
     shopping_list: str = field(default_factory=lambda: opt("SHOPPING_LIST", "todo.shopping_list"))
     tz: str = field(default_factory=lambda: opt("TZ", "Europe/Amsterdam"))
     hub_redirect: str = field(default_factory=lambda: opt("HUB_REDIRECT"))  # send displays to this hub (fw >= 0.1.4)

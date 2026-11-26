@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+- Intercom: `hassio.addon_stdin` (or `/api/say`) makes the display speak a message.
+- Station announcer: gong + announcement for morning train delays and cancellations.
+- New pages: Nieuws (NOS headlines + newest podcast episodes), Kunst (generative art of the day),
+  Pokémon of the day (dithered artwork and a Dutch fact for kids).
+- On USB the display checks every 10 seconds.
+
 ## 0.4.1
 - Spoken answers kept to two short sentences.
 

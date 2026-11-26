@@ -122,3 +122,35 @@ def describe_for_assistant(today: dt.date | None = None) -> str:
         if not c.birthday:
             bits.append(f"{c.name}: nog {c.nights} nachtjes ({c.date:%d-%m})")
     return "; ".join(bits)
+
+
+async def pokemon_fact(pk: dict) -> str:
+    """Two Dutch sentences for a 7-year-old about today's Pokémon (Claude, once a day, cached)."""
+    import json
+    from .config import settings as s
+    f = s.data_dir / "pokemon_fact.json"
+    day = src.real_now().date().isoformat()
+    try:
+        cached = json.loads(f.read_text())
+        if cached.get("day") == day and cached.get("id") == pk["id"]:
+            return cached["text"]
+    except Exception:
+        pass
+    text = ""
+    if s.anthropic_api_key:
+        try:
+            import anthropic
+            client = anthropic.AsyncAnthropic(api_key=s.anthropic_api_key)
+            r = await client.messages.create(
+                model=s.claude_model, max_tokens=300, output_config={"effort": "low"},
+                messages=[{"role": "user", "content":
+                           f"Schrijf voor een kind van 7 twee korte, enthousiaste Nederlandse zinnen over de Pokémon "
+                           f"{pk['name']} (type {', '.join(pk['types'])}, {pk['genus']}). Gebruik dit als bron: "
+                           f"{pk['flavor_en']} Geen emoji, geen aanhalingstekens, alleen de twee zinnen."}])
+            text = " ".join(b.text for b in r.content if b.type == "text").strip()
+        except Exception as e:
+            import logging
+            logging.getLogger("hub.fun").warning("pokemon fact: %s", e)
+    if text:
+        f.write_text(json.dumps({"day": day, "id": pk["id"], "text": text}, ensure_ascii=False))
+    return text

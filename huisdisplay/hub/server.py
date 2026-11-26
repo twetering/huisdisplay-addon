@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 
-from . import chime, dinner, pages, sources, strava
+from . import audio, chime, dinner, pages, sources, strava
 from .card import paginate, render_card
 from .config import settings
 
@@ -56,6 +56,7 @@ class Device:
     host: str = ""
     chimed: set = field(default_factory=set)  # events this display already chimed for
     pending_chime: str | None = None          # asked for by a pushed card
+    pending_audio: bytes | None = None        # intercom message or announcement, sent with the next frame
     history: list = field(default_factory=list)  # recent assistant turns for follow-up questions
 
 
@@ -146,9 +147,71 @@ async def _background():
         await asyncio.sleep(60)
 
 
+async def handle_message(msg) -> int:
+    """A message from Home Assistant (add-on stdin, or POST /api/say):
+    "text"  or  {"say": "...", "from": "zolder", "card": {...}, "page": "...", "chime": "ding"}."""
+    if isinstance(msg, str):
+        msg = {"say": msg}
+    targets = real_devices() or list(devices.values())
+    if msg.get("page"):
+        for d in targets:
+            d.page, d.card = msg["page"], None
+    if msg.get("card"):
+        for d in targets:
+            show_card(d, msg["card"])
+    text = (msg.get("say") or "").strip()
+    if text:
+        sender = (msg.get("from") or "").strip()
+        pcm = await audio.tts(text, msg.get("voice"))
+        card = {"kicker": f"Intercom{' · ' + sender if sender else ''}", "title": text, "sticker": "📢",
+                "blocks": [], "keep_seconds": 180}
+        if len(text) > 60:  # long message: short title, full text below
+            card["title"], card["blocks"] = f"Bericht{' van ' + sender if sender else ''}", [{"type": "text", "text": text}]
+        for d in targets:
+            show_card(d, card)
+            d.pending_chime = msg.get("chime", "ding")
+            d.pending_audio = pcm
+        log.info("intercom to %d display(s): %s", len(targets), text[:60])
+    elif msg.get("chime"):
+        for d in targets:
+            d.pending_chime = msg["chime"]
+    return len(targets)
+
+
+async def _stdin_reader():
+    """hassio.addon_stdin delivers one JSON value per line on stdin."""
+    import json
+    import sys
+    loop = asyncio.get_running_loop()
+    while True:
+        line = await loop.run_in_executor(None, sys.stdin.readline)
+        if not line:
+            return  # stdin closed
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            msg = line
+        try:
+            await handle_message(msg)
+        except Exception:
+            log.exception("stdin message failed")
+
+
 @app.on_event("startup")
 async def _startup():
     asyncio.create_task(_background())
+    if os.environ.get("SUPERVISOR_TOKEN"):
+        asyncio.create_task(_stdin_reader())
+
+
+@app.post("/api/say")
+async def api_say(req: Request, body: dict):
+    if not trusted(req):
+        return forbidden()
+    return {"ok": True, "devices": await handle_message(body)}
 
 
 def firmware_version() -> str:
@@ -234,14 +297,24 @@ async def api_frame(req: Request, page: str = "home", nav: str = ""):
         d.page, d.card = "home", None
     if nav:
         navigate(d, nav)
+    real = d.id not in ("preview", "test")
+    if real and not nav and d.pending_audio is None and (ann := await audio.train_announcement(d)):
+        show_card(d, ann[1])  # the platform announcer: gong + "Attentie..."
+        d.pending_audio = ann[0]
     c, n = await render_for(d, d.page)
+    if real and d.usb:
+        n = min(n, 10)  # check often on USB: intercom messages arrive within seconds (unchanged = 304)
     if not d.usb and not nav and (night := chime.night_wait(sources.now())):
         n = night  # on battery: sleep through the night, the morning page will be fresh
-    extra = None
-    if d.id not in ("preview", "test") and (ch := await chime.decide(d)):
-        extra = {"X-Chime": ch}
+    extra = {}
+    if real and (ch := await chime.decide(d)):
+        extra["X-Chime"] = ch
+    sound = b""
+    if real and d.pending_audio:
+        sound, d.pending_audio = d.pending_audio, None
+        extra["X-Audio-Bytes"] = str(len(sound))
     return frame_response(c, n, d, d.page, None if (nav or extra) else req.headers.get("If-None-Match"),
-                          extra_headers=extra)
+                          extra=sound, extra_headers=extra or None)
 
 
 @app.post("/api/voice")

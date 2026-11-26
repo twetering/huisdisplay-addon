@@ -1,5 +1,5 @@
 name: Huisdisplay
-version: "0.4.1"
+version: "0.5.0"
 slug: huisdisplay
 description: Hub for the Huisdisplay e-paper screen (pages, rain, trains, calendar, voice with Claude)
 url: https://github.com/twetering/huisdisplay-addon
@@ -10,6 +10,7 @@ init: false
 startup: application
 boot: auto
 homeassistant_api: true
+stdin: true
 ports:
   8787/tcp: 8787
 ports_description:
@@ -45,6 +46,10 @@ options:
   quiet_end: "07:00"
   speak_answers: true
   tts_voice: XrExE9yKIg1WjnnlVkGX
+  announce_delays: true
+  announcer_voice: JBFqnCBsd6RMkjVDRZzb
+  podcasts: ""
+  news_feed: https://feeds.nos.nl/nosnieuwsalgemeen
   countdowns: "🎁 Pakjesavond|12-05|21, 🎄 Kerst|12-25|19"
 schema:
   anthropic_api_key: password?
@@ -74,3 +79,7 @@ schema:
   quiet_end: match(^\d{2}:\d{2}$)
   speak_answers: bool
   tts_voice: str
+  announce_delays: bool
+  announcer_voice: str
+  podcasts: str?
+  news_feed: url

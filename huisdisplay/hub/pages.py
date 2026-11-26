@@ -22,7 +22,7 @@ COND_NL = {
 }
 
 ROTATION = ["home", "weer", "trein", "agenda", "huis", "afval"]  # every rotating page (order varies, see rotation())
-TITLES = {"sport": "Sport", "home": "Nu", "weer": "Weer", "trein": "Trein", "agenda": "Agenda", "huis": "Huis",
+TITLES = {"nieuws": "Nieuws", "kunst": "Kunst", "pokemon": "Pokémon", "sport": "Sport", "home": "Nu", "weer": "Weer", "trein": "Trein", "agenda": "Agenda", "huis": "Huis",
           "afval": "Afval", "answer": "Antwoord", "recept": "Recept"}
 
 
@@ -791,6 +791,104 @@ async def page_sport(ctx: Ctx):
     return c, max(ctx.interval, 600)
 
 
+TYPE_NL = {"normal": "normaal", "fire": "vuur", "water": "water", "grass": "gras", "electric": "elektrisch", "ice": "ijs",
+           "fighting": "vechten", "poison": "gif", "ground": "grond", "flying": "vliegen", "psychic": "psychisch",
+           "bug": "insect", "rock": "steen", "ghost": "geest", "dragon": "draak", "dark": "duister", "steel": "staal",
+           "fairy": "fee"}
+
+
+async def page_nieuws(ctx: Ctx):
+    c = Canvas()
+    header(c, ctx, "Nieuws")
+    items, pods = await asyncio.gather(src.news(), src.podcasts())
+    y = 40
+    c.text((14, y), "NOS · BELANGRIJKSTE BERICHTEN", LABEL())
+    y += 17
+    for k, it in enumerate(items[:3]):
+        for ln in c.wrap(it["title"], font(15, "sans", "Bold"), 372, 2):
+            c.text((14, y), ln, font(15, "sans", "Bold"))
+            y += 18
+        if it["summary"] and k == 0:  # the lead gets a line of context
+            c.text((14, y), c.fit(it["summary"], font(12, "sans", "Regular"), 372), font(12, "sans", "Regular"))
+            y += 17
+        y += 5
+    if pods and y < 222:
+        c.line(14, y, 386, y)
+        y += 8
+        c.text((14, y), "🎧  NIEUWSTE AFLEVERINGEN", LABEL())
+        y += 17
+        n = src.now()
+        for p in pods:
+            if y > 268:
+                break
+            new = p["when"] and (n - p["when"]).days < 3
+            show = p["show"] + (" ●" if new else "")
+            sw = c.width(show, font(13, "sans", "Bold"))
+            c.text((14, y), show, font(13, "sans", "Bold"))
+            when = day_label(p["when"].date())[:9] if p["when"] else ""
+            ww = c.width(when, font(11, "sans", "Regular")) + 10 if when else 0
+            c.text((22 + sw, y), c.fit(p["title"], font(13, "sans", "Regular"), 372 - 8 - sw - ww), font(13, "sans", "Regular"))
+            if when:
+                c.text((386, y + 1), when, font(11, "sans", "Regular"), anchor="ra")
+            y += 19
+    page_dots(c, ctx.page)
+    return c, max(ctx.interval, 600)
+
+
+async def page_kunst(ctx: Ctx):
+    from . import art
+    c = Canvas()
+    n = src.now()
+    img, name, num = art.of_the_day(n.date())
+    c.img.paste(img, (0, 0))
+    c.rect(0, 278, 400, 300, fill=WHITE, outline=None)
+    c.line(0, 278, 400, 278)
+    c.text((10, 282), f"Kunst van de dag · {name} · #{num:03d}", font(12, "sans", "Medium"))
+    order = rotation()
+    if ctx.page in order:
+        c.text((390, 282), f"{order.index(ctx.page) + 1}/{len(order)}", font(12, "sans", "Medium"), anchor="ra")
+    return c, 3600
+
+
+async def page_pokemon(ctx: Ctx):
+    c = Canvas()
+    header(c, ctx, "Pokémon")
+    pk = await src.pokemon_of_the_day()
+    if not pk:
+        c.text((14, 50), "Geen Pokémon gevonden vandaag", font(16, "sans", "Medium"))
+        page_dots(c, ctx.page)
+        return c, 1800
+    from PIL import Image
+    pic = pk["image"].resize((170, 170), Image.LANCZOS).point(lambda v: min(255, int(v * 1.08)))
+    c.img.paste(pic.convert("1").convert("L"), (218, 46))  # Floyd-Steinberg dither
+    c.text((14, 40), f"POKÉMON VAN DE DAG · #{pk['id']:03d}", LABEL())
+    name = pk["name"]
+    size = 40
+    while size > 22 and c.width(name, font(size, "serifi")) > 200:
+        size -= 2
+    c.text((12, 52), name, font(size, "serifi"))
+    x, y = 14, 104
+    for t in pk["types"]:
+        lab = TYPE_NL.get(t, t)
+        w = c.width(lab, font(12, "sans", "Bold")) + 16
+        c.rect(x, y, x + w, y + 20, fill=BLACK, outline=None, r=10)
+        c.text((x + w // 2, y + 3), lab, font(12, "sans", "Bold"), fill=WHITE, anchor="ma")
+        x += w + 6
+    if pk["legendary"]:
+        c.text((x + 2, y + 1), "⭐ legendarisch", font(13, "sans", "SemiBold"))
+    y = 136
+    for lab, val in (("lengte", f"{pk['height_m']:g} m"), ("gewicht", f"{pk['weight_kg']:g} kg")):
+        c.text((14, y), lab, font(13, "sans", "Regular"))
+        c.text((200, y - 1), val, font(16, "cond"), anchor="ra")
+        y += 21
+    from . import fun
+    fact = await fun.pokemon_fact(pk)
+    if fact:
+        c.paragraph(14, 222, fact, font(14, "sans", "Medium"), 372, 1.25, 3)
+    page_dots(c, ctx.page)
+    return c, 3600
+
+
 # ------------------------------------------------------------------ voice states
 async def page_listening(ctx: Ctx):
     c = Canvas()
@@ -828,5 +926,6 @@ async def page_message(ctx: Ctx, title: str, body: str):
 
 PAGES = {
     "home": page_home, "weer": page_weer, "trein": page_trein, "agenda": page_agenda,
-    "huis": page_huis, "afval": page_afval, "sport": page_sport, "listening": page_listening, "thinking": page_thinking,
+    "huis": page_huis, "afval": page_afval, "sport": page_sport, "nieuws": page_nieuws, "kunst": page_kunst,
+    "pokemon": page_pokemon, "listening": page_listening, "thinking": page_thinking,
 }

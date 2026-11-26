@@ -340,3 +340,81 @@ async def calendar(days: int = 7) -> list[dict]:
                                "allday": allday, "location": str(ev.get("LOCATION", "") or "")})
         return sorted(events, key=lambda x: (x["start"], not x["allday"]))
     return await cached("calendar", 600, f) or []
+
+
+# ------------------------------------------------------------------ News, podcasts (RSS)
+def _rss_items(xml: str) -> list[dict]:
+    import email.utils
+    import html as htmlmod
+    import re
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(xml)
+    out = []
+    for it in root.iter("item"):
+        def t(tag):
+            e = it.find(tag)
+            return (e.text or "").strip() if e is not None and e.text else ""
+        desc = re.sub(r"<[^>]+>", " ", htmlmod.unescape(t("description")))
+        try:
+            when = email.utils.parsedate_to_datetime(t("pubDate")).astimezone(TZ)
+        except Exception:
+            when = None
+        out.append({"title": htmlmod.unescape(t("title")), "summary": " ".join(desc.split()), "when": when})
+    return out
+
+
+async def news() -> list[dict]:
+    """Top headlines from the NOS (most recent first)."""
+    async def f():
+        r = await _client.get(settings.news_feed)
+        r.raise_for_status()
+        return _rss_items(r.text)[:10]
+    return await cached("news", 900, f) or []
+
+
+async def podcasts() -> list[dict]:
+    """Latest episode per configured podcast: [{show, title, when}] newest first."""
+    feeds = [p.split("|", 1) for p in settings.podcasts.split(",") if "|" in p]
+    if not feeds:
+        return []
+
+    async def f():
+        out = []
+        for show, url in feeds:
+            try:
+                r = await _client.get(url.strip(), follow_redirects=True)
+                r.raise_for_status()
+                items = _rss_items(r.text)
+                if items:
+                    out.append({"show": show.strip(), **items[0]})
+            except Exception as e:
+                log.warning("podcast %s: %s", show, e)
+        return sorted(out, key=lambda e: e["when"] or real_now() - dt.timedelta(days=999), reverse=True)
+    return await cached("podcasts", 3600, f) or []
+
+
+# ------------------------------------------------------------------ Pokémon of the day
+async def pokemon_of_the_day() -> dict | None:
+    """A different Pokémon every day (PokeAPI), with its picture dithered to 1 bit."""
+    async def f():
+        import hashlib
+        import io
+
+        from PIL import Image
+        day = real_now().date().isoformat()
+        pid = int(hashlib.sha1(day.encode()).hexdigest(), 16) % 1025 + 1
+        p = (await _client.get(f"https://pokeapi.co/api/v2/pokemon/{pid}")).json()
+        sp = (await _client.get(f"https://pokeapi.co/api/v2/pokemon-species/{pid}")).json()
+        art = p["sprites"]["other"]["official-artwork"]["front_default"] or p["sprites"]["front_default"]
+        img = Image.open(io.BytesIO((await _client.get(art)).content)).convert("RGBA")
+        bg = Image.new("RGBA", img.size, "white")
+        bg.alpha_composite(img)
+        gray = bg.convert("L")
+        flavor = next((x["flavor_text"] for x in reversed(sp.get("flavor_text_entries", []))
+                       if x["language"]["name"] == "en"), "")
+        return {"id": pid, "name": next((n["name"] for n in sp["names"] if n["language"]["name"] == "en"), p["name"]),
+                "types": [t["type"]["name"] for t in p["types"]], "height_m": p["height"] / 10,
+                "weight_kg": p["weight"] / 10, "genus": next((g["genus"] for g in sp.get("genera", [])
+                                                              if g["language"]["name"] == "en"), ""),
+                "flavor_en": " ".join(flavor.split()), "image": gray, "legendary": sp.get("is_legendary", False)}
+    return await cached("pokemon", 6 * 3600, f)

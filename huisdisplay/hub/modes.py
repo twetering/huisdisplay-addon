@@ -38,13 +38,15 @@ def mode_at(t: dt.datetime) -> str:
 
 def rotation(mode: str, t: dt.datetime, raining: bool = False) -> list[str]:
     if mode == "ochtend" and is_workday(t.date()):
-        order = ["home", "trein", "agenda", "weer", "afval", "huis"]
-    elif mode in ("ochtend", "dag"):
-        order = ["home", "agenda", "weer", "huis", "afval", "trein"]
+        order = ["home", "trein", "nieuws", "agenda", "weer", "afval", "huis", "pokemon"]
+    elif mode == "ochtend":
+        order = ["home", "nieuws", "agenda", "weer", "pokemon", "kunst", "huis", "afval", "trein"]
+    elif mode == "dag":
+        order = ["home", "agenda", "nieuws", "weer", "kunst", "pokemon", "huis", "afval", "trein"]
     elif mode == "koken":
-        order = ["home", "agenda", "huis", "weer", "afval", "trein"]
+        order = ["home", "agenda", "pokemon", "huis", "weer", "kunst", "afval", "nieuws", "trein"]
     else:
-        order = ["home", "agenda", "afval", "huis", "weer", "trein"]
+        order = ["home", "agenda", "afval", "huis", "kunst", "weer", "pokemon", "nieuws", "trein"]
     if raining:
         order.remove("weer")
         order.insert(1, "weer")
