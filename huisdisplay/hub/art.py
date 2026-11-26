@@ -127,8 +127,22 @@ def dither_sun(rng):
 ALGOS = [flow, truchet, circles, contours, ridges, dither_sun]
 
 
+_today: dict[dt.date, tuple[Image.Image, str, int]] = {}
+
+
 def of_the_day(day: dt.date) -> tuple[Image.Image, str, int]:
+    """Generate (slow: up to seconds on the HA Green). Prefer `today()` from async code."""
     n = day.toordinal()
     rng = random.Random(n)
     img, name = ALGOS[n % len(ALGOS)](rng)
     return img, name, n % 1000
+
+
+async def today(day: dt.date) -> tuple[Image.Image, str, int]:
+    """Cached per day and generated in a worker thread, so the event loop never waits on it."""
+    import asyncio
+    if day not in _today:
+        res = await asyncio.to_thread(of_the_day, day)
+        _today.clear()
+        _today[day] = res
+    return _today[day]

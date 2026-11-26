@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 (firmware 0.1.6)
+- Much faster paging: pages only read the cache (stale-while-revalidate); a background warmer keeps every
+  source fresh, so no page waits on the internet. A never-fetched source waits at most 2.5 s.
+- News page 100x faster (text fitting was quadratic on long summaries); dither fills and art generation
+  no longer block the hub (cached, art in a worker thread).
+- Firmware 0.1.6: buttons are read by a separate task, so presses during loading are never lost; several
+  quick presses jump several pages in one refresh. Shorter network timeout.
+- Measurements: render time per page, the display's fetch/draw time, event-loop blocks and memory in the
+  panel ("Snelheid"), at /api/perf and in `sensor.huisdisplay_render`; slow renders are logged.
+
 ## 0.7.0
 - Beurs page: price, day change and a one-month mini chart per stock (option `stocks`, Yahoo Finance symbols).
 - Ask the assistant about your stocks (prices and movement, never buy/sell advice).

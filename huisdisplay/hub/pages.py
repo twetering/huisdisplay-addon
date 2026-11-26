@@ -858,7 +858,7 @@ async def page_kunst(ctx: Ctx):
     from . import art
     c = Canvas()
     n = src.now()
-    img, name, num = art.of_the_day(n.date())
+    img, name, num = await art.today(n.date())
     c.img.paste(img, (0, 0))
     c.rect(0, 278, 400, 300, fill=WHITE, outline=None)
     c.line(0, 278, 400, 278)
@@ -901,7 +901,8 @@ async def page_pokemon(ctx: Ctx):
         c.text((200, y - 1), val, font(16, "cond"), anchor="ra")
         y += 21
     from . import fun
-    fact = await fun.pokemon_fact(pk)
+    # Claude writes the fact once a day: through the cache, so the page never waits past its deadline
+    fact = await src.cached(f"pokemon_fact:{pk['id']}", 86400, lambda: fun.pokemon_fact(pk))
     if fact:
         c.paragraph(14, 222, fact, font(14, "sans", "Medium"), 372, 1.25, 3)
     page_dots(c, ctx.page)

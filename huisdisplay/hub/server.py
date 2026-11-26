@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 
-from . import audio, chime, dinner, pages, sources, strava
+from . import audio, chime, dinner, pages, perf, sources, strava
 from .card import paginate, render_card
 from .config import settings
 
@@ -58,6 +58,8 @@ class Device:
     pending_chime: str | None = None          # asked for by a pushed card
     pending_audio: bytes | None = None        # intercom message or announcement, sent with the next frame
     history: list = field(default_factory=list)  # recent assistant turns for follow-up questions
+    missed: int = 0                           # button presses the display had to merge (from X-Timing)
+    heap_kb: int = 0                          # free heap on the display (from X-Timing)
 
 
 devices: dict[str, Device] = {}
@@ -75,6 +77,11 @@ def device_from(req: Request) -> Device:
     d.usb = req.headers.get("X-Power", "usb") == "usb"
     d.fw = req.headers.get("X-Fw", d.fw)
     d.last_seen = time.time()
+    if (tm := req.headers.get("X-Timing")):
+        perf.record_device(d.page, tm)
+        parts = tm.split(",")
+        d.missed = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
+        d.heap_kb = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
     d.ip = req.client.host if req.client else ""
     if d.id not in ("preview", "test"):
         d.host = req.headers.get("host", "")  # how the display reaches us: also the LAN address for links
@@ -125,10 +132,24 @@ async def _publish_to_ha():
         "sensor.huisdisplay_page": (d.page, {"friendly_name": "Huisdisplay pagina", "icon": "mdi:tablet"}),
         "sensor.huisdisplay_firmware": (d.fw or "unknown", {"friendly_name": "Huisdisplay firmware", "icon": "mdi:chip",
                                                              "power": "usb" if d.usb else "accu"}),
+        "sensor.huisdisplay_render": _perf_entity(),
     }
     for eid, (state, attrs) in ents.items():
         await sources._client.post(f"{settings.ha_url}/api/states/{eid}", headers=sources._ha_headers(),
                                    json={"state": state, "attributes": attrs})
+
+
+def _perf_entity():
+    """Slowest page render (p95, ms) with per-page details as attributes."""
+    snap = perf.snapshot()
+    worst = max((r["p95_ms"] for r in snap["render"].values()), default=0)
+    attrs = {"friendly_name": "Huisdisplay traagste pagina", "unit_of_measurement": "ms", "icon": "mdi:timer-sand",
+             "state_class": "measurement", "memory_mb": snap["memory_mb"], "loop_blocked_max_ms": snap["loop_lag_max_ms"]}
+    for page, r in snap["render"].items():
+        attrs[f"{page}_ms"] = r["p95_ms"]
+    for page, r in snap["device"].items():
+        attrs[f"display_{page}_ms"] = r["p95_ms"]
+    return worst, attrs
 
 
 _last_ns_check = 0.0
@@ -149,12 +170,17 @@ async def _announcer():
             log.info("announcement queued for %s: %s", d.id, ann[1]["title"])
 
 
+async def _warm():
+    await sources.warm(pages.current_mode())
+
+
 async def _background():
     """Every minute: NS announcer (mornings) and mirror the display into HA.
     Every 5 minutes: warm the rain cache (it drives the page order) and the dinner suggestion."""
     tick = 0
     while True:
-        for job in (_announcer, _publish_to_ha) + ((sources.rain, dinner.ensure) if tick % 5 == 0 else ()):
+        jobs = (_warm, _announcer, _publish_to_ha) + ((dinner.ensure,) if tick % 5 == 0 else ())
+        for job in jobs:
             try:
                 r = job()
                 if asyncio.iscoroutine(r):
@@ -227,6 +253,7 @@ async def _stdin_reader():
 @app.on_event("startup")
 async def _startup():
     asyncio.create_task(_background())
+    asyncio.create_task(perf.watchdog())
     if os.environ.get("SUPERVISOR_TOKEN"):
         asyncio.create_task(_stdin_reader())
 
@@ -263,6 +290,9 @@ def firmware_version() -> str:
     return f.read_text().strip() if f.exists() else ""
 
 
+RENDER_WAIT = 2.5  # seconds a page may wait for data that was never fetched
+
+
 async def render_for(d: Device, page: str):
     ctx = pages.Ctx(battery=d.battery, usb=d.usb, page=page)
     if page == "answer" and d.card:
@@ -270,11 +300,16 @@ async def render_for(d: Device, page: str):
         remaining = max(10, int(d.card_until - time.time()))
         return c, remaining
     fn = pages.PAGES.get(page, pages.page_home)
+    sources.deadline.set(time.monotonic() + RENDER_WAIT)  # sources not ready by then: placeholder
+    t0 = time.perf_counter()
     try:
         return await fn(ctx)
     except Exception as e:  # never leave the panel on a stack trace
         log.exception("page %s failed", page)
+        perf.note("error", f"{page}: {e}"[:120])
         return await pages.page_message(ctx, pages.TITLES.get(page, page), f"Deze pagina gaf een fout: {e}")
+    finally:
+        perf.record_render(page, (time.perf_counter() - t0) * 1000)
 
 
 def navigate(d: Device, nav: str):
@@ -329,8 +364,18 @@ def frame_response(canvas, next_s: int, d: Device, page: str, inm: str | None = 
     return Response(content=data + extra, media_type="application/octet-stream", headers=headers)
 
 
+@app.get("/api/perf")
+async def api_perf(req: Request):
+    """Render and display timings per page, event-loop blocking, memory (JSON)."""
+    if not trusted(req):
+        return forbidden()
+    snap = perf.snapshot()
+    snap["devices"] = {d.id: {"heap_kb": d.heap_kb, "missed": d.missed, "page": d.page} for d in real_devices()}
+    return snap
+
+
 @app.get("/api/frame")
-async def api_frame(req: Request, page: str = "home", nav: str = ""):
+async def api_frame(req: Request, page: str = "home", nav: str = "", n: int = 1):
     d = device_from(req)
     if page in ("listening", "thinking"):
         c, n = await render_for(d, page)
@@ -340,10 +385,13 @@ async def api_frame(req: Request, page: str = "home", nav: str = ""):
     if d.page == "answer" and d.card and time.time() > d.card_until:
         d.page, d.card = "home", None
     if nav:
-        navigate(d, nav)
+        for _ in range(max(1, min(n, 12)) if nav in ("next", "prev") else 1):
+            navigate(d, nav)  # several presses while the display was busy arrive as one request
     real = d.id not in ("preview", "test")
     c, n = await render_for(d, d.page)
-    if real and d.usb:
+    if nav == "ok" and d.page != "answer":
+        n = 4  # OK = refresh: data comes in the background, look again shortly
+    elif real and d.usb:
         n = min(n, 10)  # check often on USB: intercom messages arrive within seconds (unchanged = 304)
     if not d.usb and not nav and (night := chime.night_wait(sources.now())):
         n = night  # on battery: sleep through the night, the morning page will be fresh
@@ -523,6 +571,21 @@ async def index(req: Request):
         f"<tr><td><span class='dot {'ok' if h['ok'] else 'bad'}'></span>{html.escape(SOURCE_NAMES.get(k, k))}</td>"
         f"<td>{_ago(h['t'])} geleden</td><td class=muted>{html.escape(h['error'])}</td></tr>"
         for k, h in sorted(sources.health.items(), key=lambda kv: (kv[1]['ok'], SOURCE_NAMES.get(kv[0], kv[0]))))
+    snap = perf.snapshot()
+    ms = lambda v, warn: f"<b style='color:var(--bad)'>{v} ms</b>" if v > warn else f"{v} ms"
+    perf_rows = "".join(
+        f"<tr><td>{html.escape(pages.TITLES.get(pg, pg))}</td><td>{ms(r['p95_ms'], 300)}</td><td class=muted>max {r['max_ms']} ms</td>"
+        f"<td>{ms(snap['device'][pg]['p95_ms'], 4000) if pg in snap['device'] else '–'}</td>"
+        f"<td class=muted>{r['slow']}× traag · {r['n']}×</td></tr>"
+        for pg, r in sorted(snap["render"].items(), key=lambda kv: -kv[1]["p95_ms"]))
+    ev_rows = "".join(f"<tr><td class=muted>{_ago(e['t'])} geleden</td><td>{html.escape(e['text'])}</td></tr>"
+                      for e in reversed(snap["events"][-8:]))
+    perf_html = (f"<h2>Snelheid</h2><div class=panel><table><tr class=muted><td>pagina</td><td>hub (p95)</td><td></td>"
+                 f"<td>display (p95)</td><td></td></tr>{perf_rows or '<tr><td class=muted>Nog niets gemeten.</td></tr>'}</table>"
+                 f"<p class=muted>Geheugen hub {snap['memory_mb']} MB · event loop max {snap['loop_lag_max_ms']} ms geblokkeerd"
+                 f"{' · display ' + str(devs[0].heap_kb) + ' kB vrij' if devs and devs[0].heap_kb else ''}"
+                 f"{' · ' + str(devs[0].missed) + ' knopdrukken samengevoegd' if devs and devs[0].missed else ''}</p>"
+                 f"{'<table>' + ev_rows + '</table>' if ev_rows else ''}</div>")
     order = pages.rotation()
     day_imgs = "".join(img(f"home.png?at={a}", f"{lbl} · {a}") for a, lbl in
                        (("07:30", "Ochtend"), ("11:00", "Dag"), ("17:30", "Koken"), ("21:00", "Avond")))
@@ -557,6 +620,7 @@ figcaption{{font-size:12px;color:var(--muted);margin-top:4px}}.cols{{display:gri
 <div><h2>Display</h2><div class=panel><table>{dev_rows}</table></div></div>
 <div><h2>Bronnen</h2><div class=panel><table>{src_rows or "<tr><td class=muted>Nog niets opgehaald.</td></tr>"}</table></div></div>
 </div>
+{perf_html}
 <h2>Nu, door de dag</h2><div class=grid>{day_imgs}</div>
 <h2>Pagina's (in de volgorde van nu)</h2><div class=grid>{page_imgs}</div>
 <h2>Kaartjes</h2><div class=grid>{card_imgs}</div>

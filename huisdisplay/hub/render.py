@@ -71,6 +71,18 @@ def emoji_font(f: ImageFont.FreeTypeFont) -> ImageFont.FreeTypeFont:
 _BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 
 
+@lru_cache(maxsize=17)
+def _dither(level: int) -> Image.Image:
+    """Full-screen ordered-dither tile for one gray level (built once)."""
+    tile = Image.new("L", (4, 4))
+    tile.putdata([WHITE if _BAYER[y][x] < level else BLACK for y in range(4) for x in range(4)])
+    full = Image.new("L", (W, H))
+    for y in range(0, H, 4):
+        for x in range(0, W, 4):
+            full.paste(tile, (x, y))
+    return full
+
+
 class Canvas:
     def __init__(self, bg: int = WHITE):
         self.img = Image.new("L", (W, H), bg)
@@ -103,11 +115,18 @@ class Canvas:
         return int(math.ceil(sum(self.d.textlength(r, font=ef if e else f) for e, r in _runs(s))))
 
     def fit(self, s: str, f, maxw: int) -> str:
+        """Cut s to fit maxw pixels with an ellipsis. Binary search: a few measurements, whatever the length."""
+        s = s[: max(8, maxw // 2)]  # no glyph is narrower than ~2 px: the rest can never fit
         if self.width(s, f) <= maxw:
             return s
-        while s and self.width(s + "…", f) > maxw:
-            s = s[:-1]
-        return s.rstrip() + "…"
+        lo, hi = 0, len(s)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if self.width(s[:mid] + "…", f) <= maxw:
+                lo = mid
+            else:
+                hi = mid - 1
+        return s[:lo].rstrip() + "…"
 
     def wrap(self, s: str, f, maxw: int, max_lines: int = 99) -> list[str]:
         lines: list[str] = []
@@ -146,20 +165,19 @@ class Canvas:
             self.d.rectangle((x0, y0, x1, y1), fill=fill, outline=outline, width=w)
 
     def pattern(self, x0, y0, x1, y1, level: int, r: int = 0):
-        """Fill with an ordered-dither gray (level 0=black .. 16=white)."""
-        mask = Image.new("L", (W, H), 0)
+        """Fill with an ordered-dither gray (level 0=black .. 16=white).
+        One paste of a cached full-screen dither through a shape mask: no per-pixel Python."""
+        box = (max(0, x0), max(0, y0), min(W, x1 + 1), min(H, y1 + 1))
+        if box[2] <= box[0] or box[3] <= box[1]:
+            return
+        mask = Image.new("1", (box[2] - box[0], box[3] - box[1]), 0)
         md = ImageDraw.Draw(mask)
+        rx0, ry0, rx1, ry1 = x0 - box[0], y0 - box[1], x1 - box[0], y1 - box[1]
         if r:
-            md.rounded_rectangle((x0, y0, x1, y1), radius=r, fill=255)
+            md.rounded_rectangle((rx0, ry0, rx1, ry1), radius=r, fill=1)
         else:
-            md.rectangle((x0, y0, x1, y1), fill=255)
-        px = self.img.load()
-        mp = mask.load()
-        for y in range(max(0, y0), min(H, y1 + 1)):
-            row = _BAYER[y & 3]
-            for x in range(max(0, x0), min(W, x1 + 1)):
-                if mp[x, y]:
-                    px[x, y] = WHITE if row[x & 3] < level else BLACK
+            md.rectangle((rx0, ry0, rx1, ry1), fill=1)
+        self.img.paste(_dither(level).crop(box), box[:2], mask)
 
     def dotted_h(self, x0, x1, y, step=4):
         for x in range(x0, x1, step):
@@ -174,9 +192,9 @@ class Canvas:
         return bw.tobytes()  # PIL "1" mode: MSB first, 1 = white (matches panel)
 
     def to_4bpp(self) -> bytes:
-        q = self.img.point(lambda v: v * 15 // 255)
-        data = q.tobytes()
-        return bytes((data[i] << 4) | data[i + 1] for i in range(0, len(data), 2))
+        import numpy as np
+        q = np.frombuffer(self.img.point(lambda v: v * 15 // 255).tobytes(), np.uint8)
+        return ((q[0::2] << 4) | q[1::2]).astype(np.uint8).tobytes()
 
     def preview_png(self, scale: int = 2) -> bytes:
         im = self.img if self.gray else self.img.point(lambda v: 255 if v >= 140 else 0)

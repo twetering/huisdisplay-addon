@@ -40,24 +40,51 @@ def set_now(t: dt.datetime | None) -> None:
     _now_override.set(t)
 
 
+# Until when a caller may wait for a source that has no usable value yet (monotonic
+# time). Page renders set a deadline ~2.5 s ahead (render_for), shared by every source
+# on that page, so a slow website never blocks the display; without a deadline (the
+# assistant) a fetch may take up to 30 s.
+deadline: ContextVar[float | None] = ContextVar("deadline", default=None)
+_tasks: dict[str, asyncio.Task] = {}
+
+
+async def _refresh(key: str, fn):
+    try:
+        val = await fn()
+    except Exception as e:  # keep serving stale data on errors
+        log.warning("%s failed: %s", key, e)
+        health[key] = {"ok": False, "t": time.time(), "error": str(e)[:160]}
+        return None
+    _cache[key] = (time.time(), val)
+    health[key] = {"ok": True, "t": time.time(), "error": ""}
+    return val
+
+
+def _start(key: str, fn) -> asyncio.Task:
+    t = _tasks.get(key)
+    if t is None or t.done():
+        t = _tasks[key] = asyncio.create_task(_refresh(key, fn))
+    return t
+
+
 async def cached(key: str, ttl: float, fn):
+    """Stale-while-revalidate: a fresh value returns at once; a stale one also returns
+    at once while a single background task refreshes it. A value that was never fetched,
+    or was invalidated (after a change or the OK button), is waited for until the
+    deadline; past it the old value (or None) is returned and the fetch carries on."""
     hit = _cache.get(key)
-    if hit and time.time() - hit[0] < ttl:
+    if hit and hit[0] > 0:
+        if time.time() - hit[0] >= ttl:
+            _start(key, fn)
         return hit[1]
-    lock = _locks.setdefault(key, asyncio.Lock())
-    async with lock:
-        hit = _cache.get(key)
-        if hit and time.time() - hit[0] < ttl:
-            return hit[1]
-        try:
-            val = await fn()
-        except Exception as e:  # keep serving stale data on errors
-            log.warning("%s failed: %s", key, e)
-            health[key] = {"ok": False, "t": time.time(), "error": str(e)[:160]}
-            return hit[1] if hit else None
-        _cache[key] = (time.time(), val)
-        health[key] = {"ok": True, "t": time.time(), "error": ""}
-        return val
+    task = _start(key, fn)
+    dl = deadline.get()
+    wait = 30.0 if dl is None else max(0.05, dl - time.monotonic())
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), wait)
+    except asyncio.TimeoutError:
+        log.info("%s not ready in time, page uses %s", key, "the old value" if hit else "a placeholder")
+        return hit[1] if hit else None
 
 
 def peek(key: str):
@@ -67,9 +94,10 @@ def peek(key: str):
 
 
 def invalidate(prefix: str) -> None:
+    """Mark values stale: the next read returns them and refreshes in the background."""
     for k in list(_cache):
         if k.startswith(prefix):
-            del _cache[k]
+            _cache[k] = (0.0, _cache[k][1])
 
 
 # ------------------------------------------------------------------ Home Assistant
@@ -462,3 +490,26 @@ async def pokemon_of_the_day() -> dict | None:
                                                               if g["language"]["name"] == "en"), ""),
                 "flavor_en": " ".join(flavor.split()), "image": gray, "legendary": sp.get("is_legendary", False)}
     return await cached("pokemon", 6 * 3600, f)
+
+
+# ------------------------------------------------------------------ keep everything warm
+async def warm(mode: str) -> None:
+    """Called every minute in the background. Each call only fetches when its cache is
+    stale (and then in the background), so pages always find data ready."""
+    from . import art, fun, strava
+    jobs = [ha_states(), reminders(), shopping(), ha_forecast("hourly"), ha_forecast("daily"), rain(),
+            waste(), calendar(), news(), podcasts(), pokemon_of_the_day(), art.today(real_now().date())]
+    if stock_list():
+        jobs.append(stocks())
+    if strava.connected():
+        jobs.append(strava.summary())
+    if mode in ("ochtend", "dag") or settings.announce_delays:
+        jobs.append(trains())
+    for r in await asyncio.gather(*jobs, return_exceptions=True):
+        if isinstance(r, Exception):
+            log.warning("warm: %s", r)
+    if (pk := peek("pokemon")):
+        try:
+            await fun.pokemon_fact(pk)
+        except Exception as e:
+            log.warning("warm pokemon fact: %s", e)
