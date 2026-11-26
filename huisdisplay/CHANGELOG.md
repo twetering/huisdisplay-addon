@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+- The hub no longer freezes for seconds: heavy libraries load at startup (the first voice question after a
+  restart used to block everything for ~6 s), the calendar is parsed in a worker thread.
+- Agenda always shows the full week (the 'Nu' page could limit it to 3 days).
+
 ## 0.8.0 (firmware 0.1.6)
 - Much faster paging: pages only read the cache (stale-while-revalidate); a background warmer keeps every
   source fresh, so no page waits on the internet. A never-fetched source waits at most 2.5 s.

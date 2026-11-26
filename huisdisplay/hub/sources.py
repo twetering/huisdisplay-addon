@@ -341,33 +341,45 @@ async def waste() -> list[dict]:
 
 
 # ------------------------------------------------------------------ Agenda
+def _parse_ics(blobs: list[bytes], start: dt.datetime, end: dt.datetime) -> list[dict]:
+    """Expand events (pure Python, slow on big calendars: runs in a worker thread)."""
+    import icalendar
+    import recurring_ical_events
+    events = []
+    for blob in blobs:
+        cal = icalendar.Calendar.from_ical(blob)
+        for ev in recurring_ical_events.of(cal).between(start, end):
+            s = ev.get("DTSTART").dt
+            e = ev.get("DTEND").dt if ev.get("DTEND") else s
+            allday = not isinstance(s, dt.datetime)
+            if allday:
+                s = dt.datetime.combine(s, dt.time(0), TZ)
+                e = dt.datetime.combine(e, dt.time(0), TZ)
+            else:
+                s, e = s.astimezone(TZ), e.astimezone(TZ)
+            events.append({"title": str(ev.get("SUMMARY", "")), "start": s, "end": e,
+                           "allday": allday, "location": str(ev.get("LOCATION", "") or "")})
+    return sorted(events, key=lambda x: (x["start"], not x["allday"]))
+
+
+CAL_DAYS = 31  # always fetch this far ahead (the assistant may ask for weeks); callers filter
+
+
 async def calendar(days: int = 7) -> list[dict]:
     if not settings.gcal_ics:
         return []
-    import icalendar
-    import recurring_ical_events
 
     async def f():
         start = real_now().replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start + dt.timedelta(days=days)
-        events = []
+        blobs = []
         for url in settings.gcal_ics:
             r = await _client.get(url)
             r.raise_for_status()
-            cal = icalendar.Calendar.from_ical(r.content)
-            for ev in recurring_ical_events.of(cal).between(start, end):
-                s = ev.get("DTSTART").dt
-                e = ev.get("DTEND").dt if ev.get("DTEND") else s
-                allday = not isinstance(s, dt.datetime)
-                if allday:
-                    s = dt.datetime.combine(s, dt.time(0), TZ)
-                    e = dt.datetime.combine(e, dt.time(0), TZ)
-                else:
-                    s, e = s.astimezone(TZ), e.astimezone(TZ)
-                events.append({"title": str(ev.get("SUMMARY", "")), "start": s, "end": e,
-                               "allday": allday, "location": str(ev.get("LOCATION", "") or "")})
-        return sorted(events, key=lambda x: (x["start"], not x["allday"]))
-    return await cached("calendar", 600, f) or []
+            blobs.append(r.content)
+        return await asyncio.to_thread(_parse_ics, blobs, start, start + dt.timedelta(days=CAL_DAYS))
+    events = await cached("calendar", 600, f) or []
+    until = real_now().replace(hour=0, minute=0, second=0, microsecond=0) + dt.timedelta(days=days)
+    return [e for e in events if e["start"] < until]
 
 
 # ------------------------------------------------------------------ News, podcasts (RSS)
@@ -396,7 +408,7 @@ async def news() -> list[dict]:
     async def f():
         r = await _client.get(settings.news_feed)
         r.raise_for_status()
-        return _rss_items(r.text)[:10]
+        return (await asyncio.to_thread(_rss_items, r.text))[:10]  # big XML: parse off the event loop
     return await cached("news", 900, f) or []
 
 
@@ -412,7 +424,7 @@ async def podcasts() -> list[dict]:
             try:
                 r = await _client.get(url.strip(), follow_redirects=True)
                 r.raise_for_status()
-                items = _rss_items(r.text)
+                items = await asyncio.to_thread(_rss_items, r.text)
                 if items:
                     out.append({"show": show.strip(), **items[0]})
             except Exception as e:

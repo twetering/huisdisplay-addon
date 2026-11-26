@@ -30,6 +30,15 @@ from fastapi.responses import HTMLResponse
 
 from . import audio, chime, dinner, pages, perf, sources, strava
 from .card import paginate, render_card
+
+# Heavy imports happen here, before the server accepts requests: imported lazily they
+# froze the event loop (the anthropic SDK takes ~6 s to import on a HA Green).
+try:
+    from . import assistant as _assistant  # noqa: F401
+except ImportError as e:  # optional: voice works only with its dependencies installed
+    logging.getLogger("hub.server").warning("assistant unavailable: %s", e)
+import chess  # noqa: E402,F401  (schaak page)
+import numpy  # noqa: E402,F401  (audio, art)
 from .config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

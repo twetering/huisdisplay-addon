@@ -74,13 +74,9 @@ _BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 @lru_cache(maxsize=17)
 def _dither(level: int) -> Image.Image:
     """Full-screen ordered-dither tile for one gray level (built once)."""
-    tile = Image.new("L", (4, 4))
-    tile.putdata([WHITE if _BAYER[y][x] < level else BLACK for y in range(4) for x in range(4)])
-    full = Image.new("L", (W, H))
-    for y in range(0, H, 4):
-        for x in range(0, W, 4):
-            full.paste(tile, (x, y))
-    return full
+    import numpy as np
+    tile = np.where(np.array(_BAYER) < level, WHITE, BLACK).astype(np.uint8)
+    return Image.fromarray(np.tile(tile, (H // 4, W // 4)), "L")
 
 
 class Canvas:
