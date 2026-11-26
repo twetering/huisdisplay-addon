@@ -490,11 +490,11 @@ async def page_home(ctx: Ctx):
     if (wi := waste_item(waste, n)):
         y = strip_waste(c, y, wi[1])
     evening = mode in ("avond", "nacht")
+    if (air := fun.air_alert(states)) and y <= 282 - 20 - 36:  # air before fun: it asks for action
+        y = strip_box(c, y, "LUCHT", f"{air[0]} · {air[1]}")
     cds = fun.all_countdowns(n.date())
     if cds and y <= 282 - 20 - 38:
         y = strip_countdown(c, y, cds[0])
-    if (air := fun.air_alert(states)) and y <= 282 - 20 - 36:
-        y = strip_box(c, y, "LUCHT", f"{air[0]} · {air[1]}")
     pkgs, todo = await asyncio.gather(src.packages(), src.reminders())
     if (pm := package_msg(pkgs, n, evening)) and y <= 282 - 20 - 36:
         y = strip_box(c, y, "PAKKET", pm)
@@ -839,7 +839,7 @@ async def page_nieuws(ctx: Ctx):
             if y > 268:
                 break
             new = p["when"] and (n - p["when"]).days < 3
-            show = p["show"] + (" ●" if new else "")
+            show = p["show"] + (" •" if new else "")
             sw = c.width(show, font(13, "sans", "Bold"))
             c.text((14, y), show, font(13, "sans", "Bold"))
             when = day_label(p["when"].date())[:9] if p["when"] else ""

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.5
+- Air alert goes above the countdown; shorter air messages; card text stays clear of the sticker.
+
 ## 0.6.4
 - Announcer watches only your trains (`announce_trains`), from `announce_lead` minutes before departure, checking every `announce_interval` minutes.
 - No more extra wake-ups on battery.

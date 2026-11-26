@@ -167,9 +167,9 @@ def air_alert(states: dict) -> tuple[str, str] | None:
     hum = num(settings.air_humidity_sensor)
     label = str(states.get(settings.air_quality_sensor, {}).get("state", "")).lower()
     if pm is not None and pm >= 50 or label in ("slecht", "zeer slecht", "poor", "very poor"):
-        return "Zet een raam open, de lucht is slecht", f"fijnstof {pm:.0f} µg/m³" if pm is not None else label
+        return "Zet een raam open", f"fijnstof {pm:.0f} µg/m³" if pm is not None else label
     if pm is not None and pm >= 25 or label in ("matig", "moderate"):
-        return "Even luchten? De lucht wordt minder", f"fijnstof {pm:.0f} µg/m³" if pm is not None else label
+        return "Even luchten", f"fijnstof {pm:.0f} µg/m³" if pm is not None else label
     if hum is not None and hum >= 70:
-        return "Het is vochtig binnen, even luchten", f"vochtigheid {hum:.0f}%"
+        return "Vochtig, even luchten", f"vochtigheid {hum:.0f}%"
     return None

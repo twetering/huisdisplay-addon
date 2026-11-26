@@ -299,6 +299,8 @@ def render_card(card: dict, screen: int = 0, header_fn=None) -> Canvas:
         if card.get("sticker"):
             _sticker(c, card["sticker"])
         y = _title(c, card, x, y, _title_w(card, maxw))
+        if card.get("sticker"):
+            y = max(y, 108)  # keep body text clear of the corner sticker
     for b in screens[screen]:
         y = _draw_block(c, b, x, y, maxw, b.get("_offset", 0))
     foot = card.get("footer", "")
