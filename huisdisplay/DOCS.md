@@ -35,7 +35,7 @@ The rain radar uses the home location from Home Assistant.
 
 The **Huisdisplay** panel in the sidebar shows the display's status, every data source, and live previews of all pages and card types. Previews and the automation API (`/api/card`, `/api/page`) only answer Home Assistant itself; the display needs nothing but its frame, voice and firmware endpoints.
 
-The add-on also keeps `binary_sensor.huisdisplay_online`, `sensor.huisdisplay_battery`, `sensor.huisdisplay_last_seen`, `sensor.huisdisplay_page` and `sensor.huisdisplay_firmware` up to date, for dashboards and automations. Firmware updates for the display
+The add-on also keeps `binary_sensor.huisdisplay_online`, `sensor.huisdisplay_battery`, `sensor.huisdisplay_last_seen`, `sensor.huisdisplay_page`, `sensor.huisdisplay_firmware` and `sensor.huisdisplay_render` (slowest page render in ms, with per-page hub and display timings, memory and event-loop blocking as attributes) up to date, for dashboards and automations. The panel's "Snelheid" table shows the same; slow renders are logged. Firmware updates for the display
 are served from this add-on: the display installs them by itself.
 
 ## Intercom
