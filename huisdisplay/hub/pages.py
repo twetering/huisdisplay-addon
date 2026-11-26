@@ -22,7 +22,7 @@ COND_NL = {
 }
 
 ROTATION = ["home", "weer", "trein", "agenda", "huis", "afval"]  # every rotating page (order varies, see rotation())
-TITLES = {"schaak": "Schaak", "nieuws": "Nieuws", "kunst": "Kunst", "pokemon": "Pokémon", "sport": "Sport", "home": "Nu", "weer": "Weer", "trein": "Trein", "agenda": "Agenda", "huis": "Huis",
+TITLES = {"beurs": "Beurs", "schaak": "Schaak", "nieuws": "Nieuws", "kunst": "Kunst", "pokemon": "Pokémon", "sport": "Sport", "home": "Nu", "weer": "Weer", "trein": "Trein", "agenda": "Agenda", "huis": "Huis",
           "afval": "Afval", "answer": "Antwoord", "recept": "Recept"}
 
 
@@ -80,6 +80,8 @@ def raining_soon() -> bool:
 def rotation() -> list[str]:
     """Page order for the side buttons; depends on time of day and rain."""
     order = modes.rotation(current_mode(), src.now(), raining_soon())
+    if src.stock_list():
+        order.insert(order.index("nieuws") + 1, "beurs")
     if strava.connected():
         order.insert(order.index("trein") if order[-1] == "trein" else len(order), "sport")
     return order
@@ -938,6 +940,64 @@ async def page_schaak(ctx: Ctx):
     return c, 3600
 
 
+def nl_money(v: float, cur: str) -> str:
+    sym = {"USD": "$", "EUR": "€", "GBP": "£", "CAD": "C$"}.get(cur, "")
+    txt = f"{v:,.0f}" if v >= 1000 else f"{v:,.2f}"
+    return sym + txt.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def nl_pct(v: float) -> str:
+    return ("+" if v >= 0 else "−") + f"{abs(v):.1f}".replace(".", ",") + "%"
+
+
+def sparkline(c: Canvas, x0: int, y0: int, w: int, h: int, vals: list[float]):
+    if len(vals) < 2:
+        return
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or 1
+    pts = [(x0 + i * w / (len(vals) - 1), y0 + h - (v - lo) / span * h) for i, v in enumerate(vals)]
+    yb = y0 + h - (vals[0] - lo) / span * h  # dotted line at the start value: above = up this month
+    for x in range(x0, x0 + w, 4):
+        c.d.point((x, round(yb)), fill=BLACK)
+    c.d.line(pts, fill=BLACK, width=2, joint="curve")
+    ex, ey = pts[-1]
+    c.d.ellipse((ex - 2.5, ey - 2.5, ex + 2.5, ey + 2.5), fill=BLACK)
+
+
+async def page_beurs(ctx: Ctx):
+    c = Canvas()
+    header(c, ctx, "Beurs")
+    st = await src.stocks()
+    if not st:
+        c.paragraph(14, 50, "Nog geen aandelen ingesteld. Zet ze in de add-on-optie 'stocks', "
+                    "bijvoorbeeld: Tesla|TSLA, ASML|ASML.AS", font(15, "sans", "Medium"), 372)
+        page_dots(c, ctx.page)
+        return c, 1800
+    rows = st[:8]
+    rh = min(34, 228 // len(rows))
+    y = 38
+    c.text((14, y), "AANDELEN", LABEL())
+    c.text((178, y), "1 MAAND", LABEL(), anchor="ma")
+    c.text((386, y), "VANDAAG", LABEL(), anchor="ra")
+    y += 18
+    for s in rows:
+        mid = y + rh // 2
+        c.text((14, mid), c.fit(s["name"], font(15, "sans", "SemiBold"), 112), font(15, "sans", "SemiBold"), anchor="lm")
+        sparkline(c, 130, mid - 9, 96, 18, s["closes"][-22:] + ([s["price"]] if s["closes"] and s["closes"][-1] != s["price"] else []))
+        c.text((316, mid), nl_money(s["price"], s["currency"]), font(17, "cond"), anchor="rm")
+        lab = nl_pct(s["change_pct"])
+        x0, x1 = 324, 386
+        if s["change_pct"] >= 0:
+            c.rect(x0, mid - 10, x1, mid + 10, fill=BLACK, outline=None, r=10)
+            c.text(((x0 + x1) // 2, mid), lab, font(13, "sans", "Bold"), fill=WHITE, anchor="mm")
+        else:
+            c.rect(x0, mid - 10, x1, mid + 10, outline=BLACK, w=2, r=10)
+            c.text(((x0 + x1) // 2, mid), lab, font(13, "sans", "Bold"), anchor="mm")
+        y += rh
+    page_dots(c, ctx.page)
+    return c, max(ctx.interval, 900)
+
+
 # ------------------------------------------------------------------ voice states
 async def page_listening(ctx: Ctx):
     c = Canvas()
@@ -976,5 +1036,5 @@ async def page_message(ctx: Ctx, title: str, body: str):
 PAGES = {
     "home": page_home, "weer": page_weer, "trein": page_trein, "agenda": page_agenda,
     "huis": page_huis, "afval": page_afval, "sport": page_sport, "nieuws": page_nieuws, "kunst": page_kunst,
-    "pokemon": page_pokemon, "schaak": page_schaak, "listening": page_listening, "thinking": page_thinking,
+    "pokemon": page_pokemon, "schaak": page_schaak, "beurs": page_beurs, "listening": page_listening, "thinking": page_thinking,
 }

@@ -27,6 +27,7 @@ Leave a setting empty to switch that part off.
 | `announce_trains` | Only these departures, e.g. `07:58, 08:28, 08:58, 09:28` (empty: every train 06:00-10:00) |
 | `announce_lead`, `announce_interval` | Start watching this many minutes before each train; check NS every n minutes |
 | `podcasts` | `Name|feed-url`, comma separated: newest episodes on the news page |
+| `stocks` | `Name|Yahoo-symbol`, comma separated, max 8 shown: the Beurs page (e.g. `Tesla|TSLA, ASML|ASML.AS, All-World|VWRL.AS`). Prices ~15 min delayed |
 | `news_feed` | RSS feed for the headlines (default: NOS) |
 | `countdowns` | `emoji Name|MM-DD|days`, comma separated: e.g. `🎁 Pakjesavond|12-05|21` |
 

@@ -165,6 +165,11 @@ TOOLS = [
         "description": "The owner's Strava training: this week, weekly streak, recent activities.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "get_stocks",
+        "description": "Current prices of the family's watchlist (stocks/ETFs): price, currency, day change %, month change %. Prices are ~15 min delayed.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
     {"type": "web_search_20260209", "name": "web_search", "max_uses": 4,
      "user_location": {"type": "approximate", **({"city": settings.place} if settings.place else {}),
                        "country": "NL", "timezone": settings.tz}},
@@ -188,8 +193,9 @@ Gereedschap:
 - Boodschappen: add_to_shopping_list. Bij een recept met 'zet op de lijst' voeg je de ingrediënten toe die men waarschijnlijk niet in huis heeft (geen zout/peper/olie).
 - Recepten: zoek bij voorkeur op Albert Heijn Allerhande (ah.nl/allerhande) met web_search en haal het recept op met web_fetch. Noem bron en bereidingstijd kort in de footer.
 - Herinneringen/klusjes ('herinner me donderdag aan de gymtas'): add_reminder met datum; 'is gedaan' → complete_reminder. Ze verschijnen op die dag op het display.
-- Weer/regen, treinen, afval, agenda, pakketten en Strava hebben eigen tools; gebruik die in plaats van het web.
+- Weer/regen, treinen, afval, agenda, pakketten, aandelen (get_stocks) en Strava hebben eigen tools; gebruik die in plaats van het web.
 - Wil iemand gewoon een overzicht zien ('laat de buienradar zien', 'wanneer gaat de trein'), dan kan show_card met page volstaan.
+- Aandelen: geef koersen en hoe ze bewogen zijn, maar nooit koop- of verkoopadvies.
 Als je iets niet weet of niet kunt, zeg dat eerlijk op de kaart."""
 SYSTEM = SYSTEM.replace("{PLACE}", f" in {settings.place}" if settings.place else "")
 
@@ -267,6 +273,10 @@ async def run_tool(name: str, args: dict) -> str:
         from . import strava
         s = await strava.summary()
         return json.dumps(s, ensure_ascii=False, default=str) if s else "Strava is nog niet gekoppeld (hub → /strava)."
+    if name == "get_stocks":
+        st = await src.stocks()
+        return json.dumps([{k: v for k, v in x.items() if k != "closes"} for x in st], ensure_ascii=False,
+                          default=str) if st else "Geen aandelen ingesteld (optie stocks)."
     return f"onbekende tool {name}"
 
 

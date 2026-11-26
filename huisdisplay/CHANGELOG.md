@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+- Beurs page: price, day change and a one-month mini chart per stock (option `stocks`, Yahoo Finance symbols).
+- Ask the assistant about your stocks (prices and movement, never buy/sell advice).
+
 ## 0.6.5
 - Air alert goes above the countdown; shorter air messages; card text stays clear of the sticker.
 

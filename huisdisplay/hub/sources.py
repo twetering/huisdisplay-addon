@@ -393,6 +393,50 @@ async def podcasts() -> list[dict]:
     return await cached("podcasts", 3600, f) or []
 
 
+# ------------------------------------------------------------------ Stock prices
+def stock_list() -> list[tuple[str, str]]:
+    """Configured stocks as (name, Yahoo symbol); a bare symbol is its own name."""
+    out = []
+    for part in settings.stocks.split(","):
+        if part.strip():
+            name, _, sym = part.partition("|")
+            out.append((name.strip(), (sym or name).strip().upper()))
+    return out
+
+
+async def stocks() -> list[dict]:
+    """Price, day change and the last month of closes per stock (Yahoo Finance, 15 min delay)."""
+    lst = stock_list()
+    if not lst:
+        return []
+
+    async def one(name: str, sym: str) -> dict | None:
+        try:
+            r = await _client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+                                  params={"range": "1mo", "interval": "1d"}, headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            res = r.json()["chart"]["result"][0]
+            m = res["meta"]
+            closes = [c for c in res["indicators"]["quote"][0]["close"] if c is not None]
+            price = m["regularMarketPrice"]
+            chg = m.get("regularMarketChangePercent")
+            if chg is None and len(closes) > 1:
+                chg = (price / closes[-2] - 1) * 100
+            return {"name": name, "symbol": sym, "price": price, "currency": m.get("currency", ""),
+                    "change_pct": chg or 0.0, "month_pct": (price / closes[0] - 1) * 100 if closes else 0.0,
+                    "closes": closes, "when": dt.datetime.fromtimestamp(m.get("regularMarketTime", 0), TZ)}
+        except Exception as e:
+            log.warning("stock %s: %s", sym, e)
+            return None
+
+    async def f():
+        got = await asyncio.gather(*(one(n, s) for n, s in lst))
+        if not any(got):
+            raise RuntimeError("geen koersen opgehaald")
+        return [g for g in got if g]
+    return await cached("stocks", 900, f) or []
+
+
 # ------------------------------------------------------------------ Pokémon of the day
 async def pokemon_of_the_day() -> dict | None:
     """A different Pokémon every day (PokeAPI), with its picture dithered to 1 bit."""
