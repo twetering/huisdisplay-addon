@@ -1,5 +1,5 @@
 name: Huisdisplay
-version: "0.6.2"
+version: "0.6.3"
 slug: huisdisplay
 description: Hub for the Huisdisplay e-paper screen (pages, rain, trains, calendar, voice with Claude)
 url: https://github.com/twetering/huisdisplay-addon

@@ -131,18 +131,31 @@ async def _publish_to_ha():
                                    json={"state": state, "attributes": attrs})
 
 
+async def _announcer():
+    """Weekday mornings: fetch NS departures every minute, whatever page the display shows,
+    and queue an announcement for each display. USB displays pick it up within 10 s."""
+    if not audio.in_window(sources.now()):
+        return
+    await sources.trains()  # refreshes the 60 s cache
+    for d in real_devices():
+        if d.pending_audio is None and (ann := await audio.train_announcement(d)):
+            show_card(d, ann[1])
+            d.pending_audio = ann[0]
+            log.info("announcement queued for %s: %s", d.id, ann[1]["title"])
+
+
 async def _background():
-    """Every minute: mirror the display into HA. Every 5 minutes: warm the rain cache
-    (it drives the page order) and make the dinner suggestion."""
+    """Every minute: NS announcer (mornings) and mirror the display into HA.
+    Every 5 minutes: warm the rain cache (it drives the page order) and the dinner suggestion."""
     tick = 0
     while True:
-        try:
-            if tick % 5 == 0:
-                await sources.rain()
-                dinner.ensure()
-            await _publish_to_ha()
-        except Exception:
-            log.exception("background loop")
+        for job in (_announcer, _publish_to_ha) + ((sources.rain, dinner.ensure) if tick % 5 == 0 else ()):
+            try:
+                r = job()
+                if asyncio.iscoroutine(r):
+                    await r
+            except Exception:
+                log.exception("background job %s", getattr(job, "__name__", job))
         tick += 1
         await asyncio.sleep(60)
 
@@ -324,12 +337,11 @@ async def api_frame(req: Request, page: str = "home", nav: str = ""):
     if nav:
         navigate(d, nav)
     real = d.id not in ("preview", "test")
-    if real and not nav and d.pending_audio is None and (ann := await audio.train_announcement(d)):
-        show_card(d, ann[1])  # the platform announcer: gong + "Attentie..."
-        d.pending_audio = ann[0]
     c, n = await render_for(d, d.page)
     if real and d.usb:
         n = min(n, 10)  # check often on USB: intercom messages arrive within seconds (unchanged = 304)
+    if real and not d.usb and audio.in_window(sources.now()):
+        n = min(n, 180)  # on battery in the announcer window: wake every 3 min so delays are heard in time
     if not d.usb and not nav and (night := chime.night_wait(sources.now())):
         n = night  # on battery: sleep through the night, the morning page will be fresh
     extra = {}

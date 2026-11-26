@@ -68,6 +68,8 @@ def station_gong() -> bytes:
 async def tts(text: str, voice: str | None = None, max_chars: int = 400, settings_: dict | None = None) -> bytes | None:
     if not (settings.elevenlabs_api_key and text):
         return None
+    from .nlnum import spell
+    text = spell(text)  # TTS voices stumble over digits: "8:28" -> "acht uur achtentwintig"
     try:
         r = await src._client.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice or settings.tts_voice}",
@@ -86,14 +88,19 @@ def announcer_settings() -> dict:
 
 
 def _say_time(t: dt.datetime) -> str:
-    return f"{t.hour} uur {t.minute:02d}" if t.minute else f"{t.hour} uur"
+    return f"{t:%H:%M}"  # spelled out by nlnum.spell in tts()
+
+
+def in_window(t: dt.datetime) -> bool:
+    """Weekday mornings 06:00-10:00, when the announcer listens."""
+    return settings.announce_delays and t.weekday() < 5 and 6 <= t.hour < 10
 
 
 async def train_announcement(device) -> tuple[bytes, dict] | None:
     """Weekday mornings: announce a delay or cancellation of a train leaving within 45 min,
     once per train, like on the platform. Returns (pcm, card) or None."""
     n = src.now()
-    if not settings.announce_delays or n.weekday() >= 5 or not (6 <= n.hour < 10):
+    if not in_window(n):
         return None
     data = src.peek("trains")
     if not data or data.get("error"):
@@ -101,6 +108,16 @@ async def train_announcement(device) -> tuple[bytes, dict] | None:
     for d in data["departures"]:
         if not (n < d["planned"] <= n + dt.timedelta(minutes=45)):
             continue
+        if d["track_changed"] and not d["cancelled"]:
+            key = f"track:{d['planned']:%Y%m%d%H%M}:{d['track']}"
+            if key not in device.chimed:
+                device.chimed.add(key)
+                text = (f"Attentie. Spoorwijziging. De {d['type'].lower()} naar {d['direction']} van "
+                        f"{_say_time(d['planned'])} vertrekt vandaag van spoor {d['track']}.")
+                speech = await tts(text, settings.announcer_voice, settings_=announcer_settings())
+                return station_gong() + (speech or b""), {
+                    "kicker": "Omroep", "title": f"{d['planned']:%H:%M} nu van spoor {d['track']}", "sticker": "🚆",
+                    "blocks": [{"type": "text", "text": text}], "keep_seconds": 300}
         if not (d["cancelled"] or d["delay"] >= settings.announce_min_delay):
             continue
         # once per train, and again only if the delay grows by a few minutes

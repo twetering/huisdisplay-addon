@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3
+- Announcer runs in the background: NS is checked every minute on weekday mornings (06-10),
+  whatever page the display shows; USB displays speak within ~70 s of NS knowing the delay,
+  battery displays wake every 3 minutes in that window.
+- Platform changes are announced too.
+- All spoken text spells numbers out in Dutch ("8:28" -> "acht uur achtentwintig").
+
 ## 0.6.2
 - Announcer voice settings: stability and similarity (defaults 0.2 / 0.95, good for cloned voices).
 

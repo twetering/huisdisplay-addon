@@ -336,6 +336,8 @@ async def speak(text: str) -> bytes | None:
         out = f"{out} {sent}".strip()
     text = out
     try:
+        from .nlnum import spell
+        text = spell(text)
         r = await src._client.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{settings.tts_voice}", params={"output_format": "pcm_16000"},
             headers={"xi-api-key": settings.elevenlabs_api_key},
