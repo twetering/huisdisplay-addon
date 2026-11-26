@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4
+- Announcer watches only your trains (`announce_trains`), from `announce_lead` minutes before departure, checking every `announce_interval` minutes.
+- No more extra wake-ups on battery.
+
 ## 0.6.3
 - Announcer runs in the background: NS is checked every minute on weekday mornings (06-10),
   whatever page the display shows; USB displays speak within ~70 s of NS knowing the delay,

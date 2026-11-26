@@ -1,5 +1,5 @@
 name: Huisdisplay
-version: "0.6.3"
+version: "0.6.4"
 slug: huisdisplay
 description: Hub for the Huisdisplay e-paper screen (pages, rain, trains, calendar, voice with Claude)
 url: https://github.com/twetering/huisdisplay-addon
@@ -51,6 +51,9 @@ options:
   announce_delays: true
   announcer_voice: onwK4e9ZLuTAKqWW03F9
   announce_min_delay: 1
+  announce_trains: ""
+  announce_lead: 45
+  announce_interval: 1
   announcer_stability: 0.2
   announcer_similarity: 0.95
   podcasts: ""
@@ -91,3 +94,6 @@ schema:
   announce_min_delay: int(0,30)
   announcer_stability: float(0,1)
   announcer_similarity: float(0,1)
+  announce_trains: str?
+  announce_lead: int(5,120)
+  announce_interval: int(1,15)

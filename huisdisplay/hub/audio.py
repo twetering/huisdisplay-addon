@@ -91,9 +91,36 @@ def _say_time(t: dt.datetime) -> str:
     return f"{t:%H:%M}"  # spelled out by nlnum.spell in tts()
 
 
+def watched_times() -> set[str]:
+    """Planned departures to announce, as 'HH:MM' (empty = every train)."""
+    out = set()
+    for part in settings.announce_trains.replace(";", ",").split(","):
+        part = part.strip().replace(".", ":")
+        if part:
+            h, _, m = part.partition(":")
+            out.add(f"{int(h):02d}:{int(m or 0):02d}")
+    return out
+
+
+def watched(planned: dt.datetime) -> bool:
+    times = watched_times()
+    return not times or f"{planned:%H:%M}" in times
+
+
 def in_window(t: dt.datetime) -> bool:
-    """Weekday mornings 06:00-10:00, when the announcer listens."""
-    return settings.announce_delays and t.weekday() < 5 and 6 <= t.hour < 10
+    """Weekdays, from `announce_lead` minutes before one of your trains until it leaves.
+    Without a list of trains: 06:00-10:00."""
+    if not settings.announce_delays or t.weekday() >= 5:
+        return False
+    times = watched_times()
+    if not times:
+        return 6 <= t.hour < 10
+    for hm in times:
+        h, m = (int(v) for v in hm.split(":"))
+        dep = t.replace(hour=h, minute=m, second=0, microsecond=0)
+        if dep - dt.timedelta(minutes=settings.announce_lead) <= t <= dep + dt.timedelta(minutes=30):
+            return True  # (+30: a delayed train still counts after its planned time)
+    return False
 
 
 async def train_announcement(device) -> tuple[bytes, dict] | None:
@@ -106,7 +133,10 @@ async def train_announcement(device) -> tuple[bytes, dict] | None:
     if not data or data.get("error"):
         return None
     for d in data["departures"]:
-        if not (n < d["planned"] <= n + dt.timedelta(minutes=45)):
+        if not watched(d["planned"]):
+            continue
+        # announce from `announce_lead` min before departure until the train has actually left
+        if not (d["planned"] - dt.timedelta(minutes=settings.announce_lead) <= n < max(d["planned"], d["actual"])):
             continue
         if d["track_changed"] and not d["cancelled"]:
             key = f"track:{d['planned']:%Y%m%d%H%M}:{d['track']}"

@@ -131,11 +131,16 @@ async def _publish_to_ha():
                                    json={"state": state, "attributes": attrs})
 
 
+_last_ns_check = 0.0
+
+
 async def _announcer():
     """Weekday mornings: fetch NS departures every minute, whatever page the display shows,
     and queue an announcement for each display. USB displays pick it up within 10 s."""
-    if not audio.in_window(sources.now()):
+    global _last_ns_check
+    if not audio.in_window(sources.now()) or time.time() - _last_ns_check < settings.announce_interval * 60 - 5:
         return
+    _last_ns_check = time.time()
     await sources.trains()  # refreshes the 60 s cache
     for d in real_devices():
         if d.pending_audio is None and (ann := await audio.train_announcement(d)):
@@ -340,8 +345,6 @@ async def api_frame(req: Request, page: str = "home", nav: str = ""):
     c, n = await render_for(d, d.page)
     if real and d.usb:
         n = min(n, 10)  # check often on USB: intercom messages arrive within seconds (unchanged = 304)
-    if real and not d.usb and audio.in_window(sources.now()):
-        n = min(n, 180)  # on battery in the announcer window: wake every 3 min so delays are heard in time
     if not d.usb and not nav and (night := chime.night_wait(sources.now())):
         n = night  # on battery: sleep through the night, the morning page will be fresh
     extra = {}
